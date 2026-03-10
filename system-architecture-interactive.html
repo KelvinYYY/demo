@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Architecture — AI-Driven E2E Testing</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; background: #f0f2f5; color: #333; overflow: hidden; }
+  .top-bar {
+    background: #fff; border-bottom: 1px solid #ddd; padding: 12px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .top-bar h1 { font-size: 15pt; color: #202124; }
+  .orch-toggle {
+    padding: 6px 18px; border-radius: 20px; border: 2px solid #ddd;
+    background: #fff; font-size: 10.5pt; cursor: pointer; font-weight: 600;
+    transition: all 0.2s; color: #555;
+  }
+  .orch-toggle:hover { border-color: #7c3aed; color: #7c3aed; }
+  .orch-toggle.active { background: #f3e8fd; border-color: #7c3aed; color: #7c3aed; }
+
+  .diagram-area {
+    width: 100%; height: calc(100vh - 52px);
+    overflow: hidden; position: relative; background: #f0f2f5;
+  }
+  #mainsvg { width: 100%; height: 100%; cursor: grab; }
+  #mainsvg.panning { cursor: grabbing; }
+
+  .view-controls {
+    position: absolute; bottom: 16px; left: 16px;
+    display: flex; gap: 4px; align-items: center; z-index: 20;
+  }
+  .view-controls button {
+    width: 32px; height: 32px; border: 1px solid #ccc; background: #fff;
+    border-radius: 6px; cursor: pointer; font-size: 16px; color: #444;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .view-controls button:hover { background: #eee; }
+  .zoom-label { font-size: 10pt; color: #888; margin-left: 4px; min-width: 40px; }
+
+  /* Detail panel — slide-in overlay */
+  .detail-panel {
+    position: fixed; right: 0; top: 52px;
+    width: 400px; height: calc(100vh - 52px);
+    background: #fff; border-left: 1px solid #ddd;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.1);
+    overflow-y: auto; padding: 24px 20px 20px 20px;
+    font-size: 10.5pt; line-height: 1.6;
+    transform: translateX(100%); transition: transform 0.3s ease;
+    z-index: 50;
+  }
+  .detail-panel.open { transform: translateX(0); }
+  .close-btn {
+    position: absolute; top: 10px; right: 10px;
+    width: 30px; height: 30px; border: none; background: #f0f2f5;
+    border-radius: 50%; cursor: pointer; font-size: 18px; color: #666;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .close-btn:hover { background: #e0e0e0; color: #333; }
+  .detail-panel h2 { font-size: 14pt; margin-bottom: 2px; padding-right: 30px; }
+  .detail-panel .ctype { font-size: 10pt; color: #777; margin-bottom: 12px; }
+  .detail-panel h3 { font-size: 11pt; margin-top: 16px; margin-bottom: 6px; color: #202124; }
+  .detail-panel p { margin-bottom: 8px; }
+  .detail-panel ul { margin: 4px 0 8px 18px; }
+  .detail-panel ol { margin: 4px 0 8px 18px; }
+  .detail-panel li { margin-bottom: 3px; }
+  .evo { border-left: 3px solid #ddd; padding: 8px 12px; margin: 6px 0; }
+
+  /* Feedback loop diagram */
+  .evo-loop { margin: 16px 0; position: relative; padding-left: 18px; border-left: 3px solid #34a853; border-radius: 0 0 0 8px; }
+  .evo-loop::before {
+    content: ''; position: absolute; left: -3px; top: -8px;
+    width: 20px; height: 20px; border-left: 3px solid #34a853; border-top: 3px solid #34a853;
+    border-radius: 8px 0 0 0;
+  }
+  .evo-loop::after {
+    content: '↑ feeds back'; position: absolute; left: -50px; top: 50%;
+    transform: rotate(-90deg) translateX(-50%); font-size: 8.5pt; color: #1e7e34;
+    font-weight: 600; white-space: nowrap;
+  }
+  .evo-box { padding: 8px 12px; border-radius: 6px; margin: 6px 0; font-size: 10pt; line-height: 1.5; }
+  .evo-box.produces { background: #e8f0fe; border: 1px solid #4285f4; }
+  .evo-box.feedback { background: #fef7e0; border: 1px solid #f9ab00; }
+  .evo-box.improves { background: #e6f4ea; border: 1px solid #34a853; }
+  .evo-box .elabel { font-weight: 700; font-size: 9.5pt; margin-bottom: 3px; display: block; }
+  .evo-box.produces .elabel { color: #174ea6; }
+  .evo-box.feedback .elabel { color: #e37400; }
+  .evo-box.improves .elabel { color: #1e7e34; }
+  .evo-box .sig { margin: 2px 0; padding-left: 12px; text-indent: -12px; }
+  .evo-box .sig::before { content: '· '; color: #999; }
+  .evo-arrow { text-align: center; color: #bbb; font-size: 14px; line-height: 1; margin: 2px 0; }
+  .evo-mem { display: inline-block; background: #f3e8fd; border: 1px solid #7c3aed; border-radius: 4px;
+    padding: 1px 8px; font-size: 9pt; color: #7c3aed; font-weight: 600; margin-top: 4px; }
+  .evo.p1 { border-color: #4285f4; }
+  .evo.p2 { border-color: #f9ab00; }
+  .evo.p3 { border-color: #34a853; }
+  .evo .elabel { font-weight: 700; font-size: 10pt; margin-bottom: 2px; }
+  .ptag { display:inline-block; padding:1px 8px; border-radius:8px; font-size:9pt; font-weight:700; }
+  .ptag.p1 { background:#e8f0fe; color:#174ea6; }
+  .ptag.p2 { background:#fef7e0; color:#e37400; }
+  .ptag.p3 { background:#e6f4ea; color:#1e7e34; }
+
+  .component { cursor: pointer; }
+  .component:hover rect, .component:hover ellipse { filter: brightness(0.97); }
+  .component.selected rect { stroke-width: 2.5 !important; }
+
+  /* Orchestrator flow overlay */
+  .orch-flow { opacity: 0; transition: opacity 0.4s; pointer-events: none; }
+  body.orch-active .orch-flow { opacity: 1; }
+  body.orch-active .orch-highlight rect:first-child {
+    stroke-width: 3 !important;
+    filter: drop-shadow(0 0 8px rgba(124,58,237,0.35));
+  }
+  body.orch-active .data-flow { opacity: 0.25; transition: opacity 0.4s; }
+  .data-flow { transition: opacity 0.4s; }
+
+  /* MCP badges always visible */
+  .mcp-badge { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1>System Architecture</h1>
+  <button class="orch-toggle" id="orchBtn" onclick="toggleOrch()">Orchestrator Flow</button>
+</div>
+
+<div class="diagram-area">
+<svg id="mainsvg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 960" font-family="Arial, sans-serif">
+  <defs>
+    <marker id="ah" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><path d="M0,0 L10,3.5 L0,7" fill="#888"/></marker>
+    <marker id="ah-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><path d="M0,0 L10,3.5 L0,7" fill="#4285f4"/></marker>
+    <marker id="ah-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><path d="M0,0 L10,3.5 L0,7" fill="#34a853"/></marker>
+    <marker id="ah-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><path d="M0,0 L10,3.5 L0,7" fill="#f9ab00"/></marker>
+    <marker id="ah-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><path d="M0,0 L10,3.5 L0,7" fill="#d93025"/></marker>
+    <marker id="ah-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><path d="M0,0 L10,3.5 L0,7" fill="#7c3aed"/></marker>
+  </defs>
+
+  <rect width="1800" height="960" fill="#fff"/>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- SCENARIO & KNOWLEDGE CATALOG (top)          -->
+  <!-- ════════════════════════════════════════════ -->
+  <g class="component" data-id="catalog" onclick="showDetail('catalog')">
+    <rect x="300" y="25" width="1200" height="80" rx="10" fill="#fff" stroke="#f9ab00" stroke-width="1.8"/>
+    <rect x="300" y="25" width="1200" height="28" rx="10" fill="#fef7e0" stroke="none"/>
+    <rect x="300" y="47" width="1200" height="6" rx="0" fill="#fef7e0" stroke="none"/>
+    <text x="900" y="48" font-size="14" font-weight="700" fill="#e37400" text-anchor="middle">Scenario &amp; Knowledge Catalog</text>
+    <text x="900" y="72" font-size="11" fill="#888" text-anchor="middle">test scenarios  ·  screen knowledge  ·  element → code mappings</text>
+    <text x="900" y="90" font-size="10" fill="#aaa" text-anchor="middle">/record-flow · successful runs · developer annotations</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- ORCHESTRATOR                                 -->
+  <!-- ════════════════════════════════════════════ -->
+  <g class="component orch-highlight" data-id="orchestrator" onclick="showDetail('orchestrator')">
+    <rect x="40" y="130" width="1720" height="48" rx="8" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/>
+    <rect x="40" y="130" width="1720" height="22" rx="8" fill="#f3e8fd" stroke="none"/>
+    <rect x="40" y="148" width="1720" height="4" rx="0" fill="#f3e8fd" stroke="none"/>
+    <text x="900" y="148" font-size="13" font-weight="700" fill="#7c3aed" text-anchor="middle">Orchestrator / Run Controller</text>
+    <text x="900" y="168" font-size="10.5" fill="#666" text-anchor="middle">Sequences pipeline steps  ·  Collects run metrics (timing, tokens, retries)  ·  Error handling &amp; recovery  ·  Entry: /validate-pr</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- GROUP: Analysis (left)                       -->
+  <!-- ════════════════════════════════════════════ -->
+  <rect x="40" y="202" width="460" height="490" rx="12" fill="none" stroke="#bbb" stroke-width="1.5" stroke-dasharray="8 4"/>
+  <text x="270" y="224" font-size="14" font-weight="700" fill="#555" text-anchor="middle">Analysis</text>
+  <text x="270" y="238" font-size="10" fill="#999" text-anchor="middle">AI-powered</text>
+
+  <!-- Planner -->
+  <g class="component" data-id="planner" onclick="showDetail('planner')">
+    <rect x="80" y="258" width="380" height="115" rx="8" fill="#fff" stroke="#4285f4" stroke-width="1.5"/>
+    <rect x="80" y="258" width="380" height="32" rx="8" fill="#e8f0fe" stroke="none"/>
+    <rect x="80" y="282" width="380" height="8" rx="0" fill="#e8f0fe" stroke="none"/>
+    <text x="270" y="280" font-size="13" font-weight="700" fill="#174ea6" text-anchor="middle">Planner / Risk Analyzer</text>
+    <text x="270" y="310" font-size="11" fill="#555" text-anchor="middle">code changes → risk areas → validation rules</text>
+    <rect x="290" y="335" width="155" height="18" rx="9" fill="#f3e8fd" stroke="#7c3aed" stroke-width="0.8"/>
+    <text x="367" y="348" font-size="8.5" fill="#7c3aed" text-anchor="middle">fail/flaw memory → revise</text>
+  </g>
+  <circle cx="80" cy="258" r="14" fill="#4285f4"/><text x="80" y="263" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+
+  <!-- Scenario Generator -->
+  <g class="component" data-id="generator" onclick="showDetail('generator')">
+    <rect x="80" y="430" width="380" height="115" rx="8" fill="#fff" stroke="#4285f4" stroke-width="1.5"/>
+    <rect x="80" y="430" width="380" height="32" rx="8" fill="#e8f0fe" stroke="none"/>
+    <rect x="80" y="454" width="380" height="8" rx="0" fill="#e8f0fe" stroke="none"/>
+    <text x="270" y="452" font-size="13" font-weight="700" fill="#174ea6" text-anchor="middle">Scenario Generator</text>
+    <text x="270" y="482" font-size="11" fill="#555" text-anchor="middle">select or generate test scenarios from catalog</text>
+    <rect x="290" y="505" width="155" height="18" rx="9" fill="#f3e8fd" stroke="#7c3aed" stroke-width="0.8"/>
+    <text x="367" y="518" font-size="8.5" fill="#7c3aed" text-anchor="middle">fail/flaw memory → revise</text>
+  </g>
+  <circle cx="80" cy="430" r="14" fill="#4285f4"/><text x="80" y="435" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- GROUP: Execution Engine (center)             -->
+  <!-- ════════════════════════════════════════════ -->
+  <rect x="560" y="202" width="580" height="490" rx="12" fill="none" stroke="#bbb" stroke-width="1.5" stroke-dasharray="8 4"/>
+  <text x="850" y="224" font-size="14" font-weight="700" fill="#555" text-anchor="middle">Execution Engine</text>
+  <text x="850" y="238" font-size="10" fill="#999" text-anchor="middle">AI + Deterministic</text>
+
+  <!-- Build & Install -->
+  <g class="component" data-id="build" onclick="showDetail('build')">
+    <rect x="590" y="258" width="220" height="85" rx="8" fill="#fff" stroke="#5f6368" stroke-width="1.5"/>
+    <rect x="590" y="258" width="220" height="28" rx="8" fill="#f1f3f4" stroke="none"/>
+    <rect x="590" y="280" width="220" height="6" rx="0" fill="#f1f3f4" stroke="none"/>
+    <text x="700" y="278" font-size="13" font-weight="700" fill="#333" text-anchor="middle">Build &amp; Install</text>
+    <text x="700" y="310" font-size="11" fill="#555" text-anchor="middle">bzl build · adb install</text>
+    <g class="mcp-badge"><rect x="770" y="248" width="44" height="16" rx="8" fill="#f9ab00"/><text x="792" y="260" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">MCP</text></g>
+  </g>
+  <circle cx="590" cy="258" r="14" fill="#5f6368"/><text x="590" y="263" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+
+  <!-- Env Pre-flight -->
+  <g class="component" data-id="env" onclick="showDetail('env')">
+    <rect x="840" y="258" width="220" height="85" rx="8" fill="#fff" stroke="#5f6368" stroke-width="1.5"/>
+    <rect x="840" y="258" width="220" height="28" rx="8" fill="#f1f3f4" stroke="none"/>
+    <rect x="840" y="280" width="220" height="6" rx="0" fill="#f1f3f4" stroke="none"/>
+    <text x="950" y="278" font-size="13" font-weight="700" fill="#333" text-anchor="middle">Env Pre-flight</text>
+    <text x="950" y="310" font-size="11" fill="#555" text-anchor="middle">device · permissions · tweaks/COF</text>
+    <g class="mcp-badge"><rect x="1020" y="248" width="44" height="16" rx="8" fill="#f9ab00"/><text x="1042" y="260" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">MCP</text></g>
+  </g>
+
+  <!-- Flow Navigator -->
+  <g class="component" data-id="navigator" onclick="showDetail('navigator')">
+    <rect x="590" y="398" width="520" height="125" rx="8" fill="#fff" stroke="#4285f4" stroke-width="1.5"/>
+    <rect x="590" y="398" width="520" height="32" rx="8" fill="#e8f0fe" stroke="none"/>
+    <rect x="590" y="422" width="520" height="8" rx="0" fill="#e8f0fe" stroke="none"/>
+    <text x="850" y="420" font-size="13" font-weight="700" fill="#174ea6" text-anchor="middle">Flow Navigator</text>
+    <text x="850" y="450" font-size="11" fill="#555" text-anchor="middle">replay recorded flows or AI-navigate unrecorded paths</text>
+    <rect x="873" y="470" width="155" height="18" rx="9" fill="#f3e8fd" stroke="#7c3aed" stroke-width="0.8"/>
+    <text x="950" y="483" font-size="8.5" fill="#7c3aed" text-anchor="middle">fail/flaw memory → revise</text>
+  </g>
+  <circle cx="590" cy="398" r="14" fill="#4285f4"/><text x="590" y="403" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+
+  <!-- Device Controller -->
+  <g class="component" data-id="device" onclick="showDetail('device')">
+    <rect x="690" y="575" width="320" height="72" rx="8" fill="#fff" stroke="#5f6368" stroke-width="1.5"/>
+    <rect x="690" y="575" width="320" height="26" rx="8" fill="#f1f3f4" stroke="none"/>
+    <rect x="690" y="595" width="320" height="6" rx="0" fill="#f1f3f4" stroke="none"/>
+    <text x="850" y="594" font-size="13" font-weight="700" fill="#333" text-anchor="middle">Device Controller</text>
+    <text x="850" y="624" font-size="11" fill="#555" text-anchor="middle">ADB / idb · tap, swipe, deep links · UI dump</text>
+    <g class="mcp-badge"><rect x="970" y="565" width="44" height="16" rx="8" fill="#f9ab00"/><text x="992" y="577" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">MCP</text></g>
+  </g>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- GROUP: Validation & Reporting (right)        -->
+  <!-- ════════════════════════════════════════════ -->
+  <rect x="1200" y="202" width="560" height="490" rx="12" fill="none" stroke="#bbb" stroke-width="1.5" stroke-dasharray="8 4"/>
+  <text x="1480" y="224" font-size="14" font-weight="700" fill="#555" text-anchor="middle">Validation &amp; Reporting</text>
+  <text x="1480" y="238" font-size="10" fill="#999" text-anchor="middle">AI + Deterministic</text>
+
+  <!-- Log Collector -->
+  <g class="component" data-id="log" onclick="showDetail('log')">
+    <rect x="1230" y="258" width="240" height="85" rx="8" fill="#fff" stroke="#5f6368" stroke-width="1.5"/>
+    <rect x="1230" y="258" width="240" height="28" rx="8" fill="#f1f3f4" stroke="none"/>
+    <rect x="1230" y="280" width="240" height="6" rx="0" fill="#f1f3f4" stroke="none"/>
+    <text x="1350" y="278" font-size="13" font-weight="700" fill="#333" text-anchor="middle">Log Collector &amp; Parser</text>
+    <text x="1350" y="310" font-size="11" fill="#555" text-anchor="middle">logcat · regex · sequence match</text>
+    <g class="mcp-badge"><rect x="1430" y="248" width="44" height="16" rx="8" fill="#f9ab00"/><text x="1452" y="260" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">MCP</text></g>
+  </g>
+  <circle cx="1230" cy="258" r="14" fill="#5f6368"/><text x="1230" y="263" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">5</text>
+
+  <!-- Screenshot Comparator -->
+  <g class="component" data-id="screenshot" onclick="showDetail('screenshot')">
+    <rect x="1500" y="258" width="240" height="85" rx="8" fill="#fff" stroke="#5f6368" stroke-width="1.5"/>
+    <rect x="1500" y="258" width="240" height="28" rx="8" fill="#f1f3f4" stroke="none"/>
+    <rect x="1500" y="280" width="240" height="6" rx="0" fill="#f1f3f4" stroke="none"/>
+    <text x="1620" y="278" font-size="13" font-weight="700" fill="#333" text-anchor="middle">Screenshot &amp; Comparator</text>
+    <text x="1620" y="310" font-size="11" fill="#555" text-anchor="middle">screencap · pixel diff · threshold</text>
+    <g class="mcp-badge"><rect x="1700" y="248" width="44" height="16" rx="8" fill="#f9ab00"/><text x="1722" y="260" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">MCP</text></g>
+  </g>
+
+  <!-- Validator -->
+  <g class="component" data-id="validator" onclick="showDetail('validator')">
+    <rect x="1230" y="410" width="510" height="100" rx="8" fill="#fff" stroke="#4285f4" stroke-width="1.5"/>
+    <rect x="1230" y="410" width="510" height="32" rx="8" fill="#e8f0fe" stroke="none"/>
+    <rect x="1230" y="434" width="510" height="8" rx="0" fill="#e8f0fe" stroke="none"/>
+    <text x="1485" y="432" font-size="13" font-weight="700" fill="#174ea6" text-anchor="middle">Validator / Assessor</text>
+    <text x="1485" y="460" font-size="11" fill="#555" text-anchor="middle">evidence + rules → per-rule pass/fail verdicts</text>
+    <rect x="1600" y="478" width="155" height="18" rx="9" fill="#f3e8fd" stroke="#7c3aed" stroke-width="0.8"/>
+    <text x="1677" y="491" font-size="8.5" fill="#7c3aed" text-anchor="middle">fail/flaw memory → revise</text>
+  </g>
+  <circle cx="1230" cy="410" r="14" fill="#4285f4"/><text x="1230" y="415" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">6</text>
+
+  <!-- Report Generator -->
+  <g class="component" data-id="report" onclick="showDetail('report')">
+    <rect x="1330" y="568" width="310" height="85" rx="8" fill="#fff" stroke="#5f6368" stroke-width="1.5"/>
+    <rect x="1330" y="568" width="310" height="28" rx="8" fill="#f1f3f4" stroke="none"/>
+    <rect x="1330" y="590" width="310" height="6" rx="0" fill="#f1f3f4" stroke="none"/>
+    <text x="1485" y="588" font-size="13" font-weight="700" fill="#333" text-anchor="middle">Report Generator</text>
+    <text x="1485" y="620" font-size="11" fill="#555" text-anchor="middle">HTML report · YAML · attach to PR</text>
+    <g class="mcp-badge"><rect x="1600" y="558" width="44" height="16" rx="8" fill="#f9ab00"/><text x="1622" y="570" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">MCP</text></g>
+  </g>
+  <circle cx="1330" cy="568" r="14" fill="#5f6368"/><text x="1330" y="573" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">7</text>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- DATA FLOW ARROWS (dimmed when orch active)   -->
+  <!-- ════════════════════════════════════════════ -->
+  <g class="data-flow">
+    <!-- Planner → Generator -->
+    <line x1="270" y1="373" x2="270" y2="428" stroke="#888" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="285" y="405" font-size="10" fill="#888" font-style="italic">risk assessment + rules</text>
+
+    <!-- Build → Env -->
+    <line x1="810" y1="300" x2="838" y2="300" stroke="#888" stroke-width="1.5" marker-end="url(#ah)"/>
+
+    <!-- Env → Navigator -->
+    <line x1="950" y1="343" x2="950" y2="396" stroke="#888" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="960" y="375" font-size="10" fill="#888" font-style="italic">device ready</text>
+
+    <!-- Navigator ↔ Device -->
+    <line x1="820" y1="523" x2="820" y2="573" stroke="#4285f4" stroke-width="2" marker-end="url(#ah-blue)"/>
+    <text x="780" y="552" font-size="10" fill="#4285f4" font-style="italic">actions</text>
+    <line x1="880" y1="573" x2="880" y2="525" stroke="#888" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+    <text x="892" y="552" font-size="10" fill="#888" font-style="italic">UI state</text>
+
+    <!-- Log → Validator -->
+    <line x1="1350" y1="343" x2="1350" y2="408" stroke="#888" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="1360" y="380" font-size="10" fill="#888" font-style="italic">structured logs</text>
+    <!-- Screenshot → Validator -->
+    <line x1="1620" y1="343" x2="1620" y2="408" stroke="#888" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="1630" y="380" font-size="10" fill="#888" font-style="italic">screenshots + diffs</text>
+
+    <!-- Validator → Report -->
+    <line x1="1485" y1="510" x2="1485" y2="566" stroke="#888" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="1495" y="545" font-size="10" fill="#888" font-style="italic">verdicts + evidence</text>
+
+    <!-- Generator → Build (cross-group) -->
+    <path d="M460,487 L525,487 L525,300 L588,300" fill="none" stroke="#888" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="530" y="400" font-size="10" fill="#888" font-style="italic" transform="rotate(-90,530,400)">build target + scenarios</text>
+
+    <!-- Device → Log + Screenshot (cross-group) -->
+    <path d="M1010,605 L1120,605 L1120,300 L1228,300" fill="none" stroke="#888" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="1128" y="455" font-size="10" fill="#888" font-style="italic" transform="rotate(-90,1128,455)">logcat stream</text>
+    <path d="M1010,620 L1160,620 L1160,300 L1498,300" fill="none" stroke="#888" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="1168" y="465" font-size="10" fill="#888" font-style="italic" transform="rotate(-90,1168,465)">screencap</text>
+
+    <!-- Catalog → Generator -->
+    <path d="M350,65 L55,65 L55,487 L78,487" fill="none" stroke="#f9ab00" stroke-width="1.5" marker-end="url(#ah-amber)"/>
+    <text x="42" y="320" font-size="10" fill="#e37400" font-style="italic" transform="rotate(-90,42,320)">read / write scenarios</text>
+
+    <!-- Catalog → Navigator -->
+    <path d="M900,105 L900,185 L535,185 L535,460 L588,460" fill="none" stroke="#f9ab00" stroke-width="1.5" marker-end="url(#ah-amber)"/>
+    <text x="522" y="340" font-size="10" fill="#e37400" font-style="italic" transform="rotate(-90,522,340)">screen knowledge + recorded flows</text>
+
+    <!-- Inputs → Planner -->
+    <path d="M145,750 L145,716 L200,716 L200,375" fill="none" stroke="#d93025" stroke-width="1.5" marker-end="url(#ah-red)"/>
+    <text x="152" y="735" font-size="10" fill="#d93025" font-style="italic">changed code</text>
+    <path d="M355,750 L355,716 L360,716 L360,375" fill="none" stroke="#d93025" stroke-width="1.5" marker-end="url(#ah-red)"/>
+    <text x="362" y="735" font-size="10" fill="#d93025" font-style="italic">context</text>
+
+    <!-- Device Controller → Device -->
+    <line x1="850" y1="647" x2="850" y2="718" stroke="#888" stroke-width="1.5" marker-end="url(#ah)"/>
+    <text x="860" y="690" font-size="10" fill="#888" font-style="italic">execute</text>
+
+    <!-- Report → Artifacts -->
+    <line x1="1485" y1="653" x2="1485" y2="728" stroke="#34a853" stroke-width="1.5" marker-end="url(#ah-green)"/>
+    <text x="1495" y="695" font-size="10" fill="#1e7e34" font-style="italic">store</text>
+
+    <!-- Artifacts → PR -->
+    <path d="M1350,770 L145,770 L145,802" fill="none" stroke="#999" stroke-width="1" stroke-dasharray="5 3"/>
+    <text x="750" y="764" font-size="10" fill="#999" text-anchor="middle" font-style="italic">attach report to PR</text>
+
+    <!-- CI → Planner (future) -->
+    <path d="M845,720 L845,710 L510,710 L510,316 L462,316" fill="none" stroke="#999" stroke-width="1" stroke-dasharray="5 3" class="future-el"/>
+    <text x="518" y="520" font-size="10" fill="#999" font-style="italic" transform="rotate(-90,518,520)">future: CI trigger</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- ORCHESTRATOR FLOW OVERLAY (hidden default)   -->
+  <!-- ════════════════════════════════════════════ -->
+  <g class="orch-flow">
+    <!-- Entry label -->
+    <rect x="44" y="132" width="120" height="22" rx="4" fill="#f3e8fd" stroke="#7c3aed" stroke-width="1"/>
+    <text x="104" y="147" font-size="10" fill="#7c3aed" text-anchor="middle" font-weight="700">/validate-pr →</text>
+
+    <!-- Exit label -->
+    <rect x="1640" y="132" width="116" height="22" rx="4" fill="#f3e8fd" stroke="#7c3aed" stroke-width="1"/>
+    <text x="1698" y="147" font-size="10" fill="#7c3aed" text-anchor="middle" font-weight="700">→ report + metrics</text>
+
+    <!-- Connection: Orch → Analysis group -->
+    <line x1="220" y1="178" x2="220" y2="202" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#ah-purple)"/>
+    <line x1="320" y1="178" x2="320" y2="202" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#ah-purple)"/>
+    <!-- Annotation below orch for Analysis -->
+    <rect x="75" y="182" width="400" height="17" rx="4" fill="#f3e8fd" stroke="none"/>
+    <text x="275" y="195" font-size="10" fill="#7c3aed" text-anchor="middle" font-weight="600">① Call Planner  →  ② Call Generator with risks</text>
+
+    <!-- Connection: Orch → Execution group -->
+    <line x1="750" y1="178" x2="750" y2="202" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#ah-purple)"/>
+    <line x1="950" y1="178" x2="950" y2="202" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#ah-purple)"/>
+    <!-- Annotation below orch for Execution -->
+    <rect x="610" y="182" width="520" height="17" rx="4" fill="#f3e8fd" stroke="none"/>
+    <text x="870" y="195" font-size="10" fill="#7c3aed" text-anchor="middle" font-weight="600">③ Trigger Build  →  ④ Pre-flight  →  ⑤ Navigator loop until steps done</text>
+
+    <!-- Connection: Orch → Validation group -->
+    <line x1="1380" y1="178" x2="1380" y2="202" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#ah-purple)"/>
+    <line x1="1580" y1="178" x2="1580" y2="202" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#ah-purple)"/>
+    <!-- Annotation below orch for Validation -->
+    <rect x="1235" y="182" width="490" height="17" rx="4" fill="#f3e8fd" stroke="none"/>
+    <text x="1480" y="195" font-size="10" fill="#7c3aed" text-anchor="middle" font-weight="600">⑥ Feed evidence to Validator  →  ⑦ Generate report + store</text>
+
+    <!-- Error handling / metrics bar at bottom of groups -->
+    <rect x="55" y="665" width="430" height="24" rx="5" fill="#f3e8fd" stroke="#7c3aed" stroke-width="0.8"/>
+    <text x="270" y="681" font-size="9.5" fill="#7c3aed" text-anchor="middle" font-weight="600">Retry LLM errors · Track token usage per call</text>
+
+    <rect x="575" y="665" width="550" height="24" rx="5" fill="#f3e8fd" stroke="#7c3aed" stroke-width="0.8"/>
+    <text x="850" y="681" font-size="9.5" fill="#7c3aed" text-anchor="middle" font-weight="600">Retry on device disconnect · Enforce step timeout · Abort on build failure</text>
+
+    <rect x="1215" y="665" width="530" height="24" rx="5" fill="#f3e8fd" stroke="#7c3aed" stroke-width="0.8"/>
+    <text x="1480" y="681" font-size="9.5" fill="#7c3aed" text-anchor="middle" font-weight="600">Partial report if validation fails · Aggregate final pass/fail · Cost summary</text>
+
+    <!-- Metrics return arrows (thin dashed, from group bottoms back to orch) -->
+    <path d="M485,665 L498,665 L498,162 L462,162" fill="none" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ah-purple)"/>
+    <text x="503" y="450" font-size="9" fill="#9b6ddb" font-style="italic" transform="rotate(-90,503,450)">status + metrics</text>
+
+    <path d="M1125,665 L1148,665 L1148,162 L1142,162" fill="none" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ah-purple)"/>
+    <text x="1153" y="450" font-size="9" fill="#9b6ddb" font-style="italic" transform="rotate(-90,1153,450)">status + metrics</text>
+
+    <path d="M1745,665 L1768,665 L1768,162 L1762,162" fill="none" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ah-purple)"/>
+    <text x="1773" y="450" font-size="9" fill="#9b6ddb" font-style="italic" transform="rotate(-90,1773,450)">status + metrics</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- EXTERNAL INPUTS (bottom-left)                -->
+  <!-- ════════════════════════════════════════════ -->
+  <g class="component" data-id="pr" onclick="showDetail('pr')">
+    <rect x="60" y="750" width="170" height="50" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.5"/>
+    <rect x="60" y="750" width="170" height="22" rx="8" fill="#fce8e6" stroke="none"/>
+    <rect x="60" y="766" width="170" height="6" rx="0" fill="#fce8e6" stroke="none"/>
+    <text x="145" y="768" font-size="12" font-weight="700" fill="#c5221f" text-anchor="middle">Code Changes</text>
+    <text x="145" y="790" font-size="10" fill="#888" text-anchor="middle">PR diff · modified files</text>
+  </g>
+  <g class="component" data-id="codebase" onclick="showDetail('codebase')">
+    <rect x="270" y="750" width="170" height="50" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.5"/>
+    <rect x="270" y="750" width="170" height="22" rx="8" fill="#fce8e6" stroke="none"/>
+    <rect x="270" y="766" width="170" height="6" rx="0" fill="#fce8e6" stroke="none"/>
+    <text x="355" y="768" font-size="12" font-weight="700" fill="#c5221f" text-anchor="middle">Codebase Context</text>
+    <text x="355" y="790" font-size="10" fill="#888" text-anchor="middle">call sites · dependencies</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- INFRASTRUCTURE (bottom-center)               -->
+  <!-- ════════════════════════════════════════════ -->
+  <rect x="560" y="720" width="580" height="75" rx="12" fill="none" stroke="#bbb" stroke-width="1.5" stroke-dasharray="8 4"/>
+  <text x="850" y="742" font-size="13" font-weight="700" fill="#555" text-anchor="middle">Infrastructure</text>
+  <g class="component" data-id="infra-device" onclick="showDetail('infra-device')">
+    <rect x="590" y="755" width="150" height="28" rx="6" fill="#fff" stroke="#999" stroke-width="1"/>
+    <text x="665" y="774" font-size="11" fill="#333" text-anchor="middle">Device / Emulator</text>
+  </g>
+  <g class="component future-el" data-id="infra-ci" onclick="showDetail('infra-ci')">
+    <rect x="770" y="755" width="150" height="28" rx="6" fill="#fff" stroke="#999" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="845" y="774" font-size="11" fill="#999" text-anchor="middle">CI/CD (future)</text>
+  </g>
+  <g class="component future-el" data-id="infra-farm" onclick="showDetail('infra-farm')">
+    <rect x="950" y="755" width="170" height="28" rx="6" fill="#fff" stroke="#999" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="1035" y="774" font-size="11" fill="#999" text-anchor="middle">Device Farm (future)</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- OUTPUT (bottom-right)                        -->
+  <!-- ════════════════════════════════════════════ -->
+  <g class="component" data-id="artifacts" onclick="showDetail('artifacts')">
+    <rect x="1350" y="730" width="240" height="55" rx="8" fill="#fff" stroke="#34a853" stroke-width="1.5"/>
+    <rect x="1350" y="730" width="240" height="22" rx="8" fill="#e6f4ea" stroke="none"/>
+    <rect x="1350" y="746" width="240" height="6" rx="0" fill="#e6f4ea" stroke="none"/>
+    <text x="1470" y="748" font-size="12" font-weight="700" fill="#1e7e34" text-anchor="middle">Artifact Storage</text>
+    <text x="1470" y="770" font-size="10" fill="#888" text-anchor="middle">reports · test cases · screenshots</text>
+  </g>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- LEGEND                                       -->
+  <!-- ════════════════════════════════════════════ -->
+  <rect x="40" y="860" width="1720" height="55" rx="8" fill="#f8f9fa" stroke="none"/>
+  <rect x="70" y="876" width="20" height="14" rx="4" fill="#e8f0fe" stroke="#4285f4" stroke-width="1.5"/>
+  <text x="97" y="888" font-size="11" fill="#333">AI Service</text>
+  <rect x="200" y="876" width="20" height="14" rx="4" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.5"/>
+  <text x="227" y="888" font-size="11" fill="#333">Deterministic</text>
+  <rect x="340" y="876" width="20" height="14" rx="4" fill="#f3e8fd" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="367" y="888" font-size="11" fill="#333">Orchestrator</text>
+  <rect x="480" y="876" width="20" height="14" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.5"/>
+  <text x="507" y="888" font-size="11" fill="#333">Input</text>
+  <rect x="570" y="876" width="20" height="14" rx="4" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
+  <text x="597" y="888" font-size="11" fill="#333">Data Store</text>
+  <rect x="700" y="876" width="20" height="14" rx="4" fill="#e6f4ea" stroke="#34a853" stroke-width="1.5"/>
+  <text x="727" y="888" font-size="11" fill="#333">Output</text>
+  <line x1="800" y1="883" x2="830" y2="883" stroke="#999" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="837" y="888" font-size="11" fill="#333">Future</text>
+  <rect x="920" y="876" width="36" height="14" rx="7" fill="#f9ab00"/>
+  <text x="938" y="887" font-size="8" font-weight="700" fill="#fff" text-anchor="middle">MCP</text>
+  <text x="963" y="888" font-size="11" fill="#333">Phase 2+</text>
+  <circle cx="1060" cy="883" r="10" fill="#4285f4"/><text x="1060" y="887" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">N</text>
+  <text x="1077" y="888" font-size="11" fill="#333">Workflow step</text>
+  <text x="1200" y="888" font-size="11" fill="#555">Click → details + evolution  ·  Drag to pan  ·  Scroll to zoom</text>
+  <text x="270" y="906" font-size="10" fill="#aaa" text-anchor="middle">1 Code Changes → 2 Scenarios → 3 Build → 4 Execute → 5 Evidence → 6 Validate → 7 Report</text>
+</svg>
+
+<div class="view-controls">
+  <button onclick="zoomIn()" title="Zoom in">+</button>
+  <button onclick="zoomOut()" title="Zoom out">&minus;</button>
+  <button onclick="resetView()" title="Reset view">&#x27F2;</button>
+  <span class="zoom-label" id="zl">100%</span>
+</div>
+</div>
+
+<!-- Detail panel -->
+<div class="detail-panel" id="dp">
+  <button class="close-btn" onclick="closePanel()">&times;</button>
+  <div id="dp-content"></div>
+</div>
+
+<script>
+const D = {
+  orchestrator: {
+    name: 'Orchestrator / Run Controller', type: 'Meta-component',
+    desc: 'Central coordinator that drives the entire validation pipeline. Receives trigger, sequences all steps, manages data handoff between components, and produces the final report with run metrics.<br><br><b>Interaction with each group:</b><ol><li><b>Analysis</b> — Calls Planner with code changes + context → receives risk assessment → calls Generator with risks + catalog → receives ordered scenarios + build target</li><li><b>Execution</b> — Triggers Build with target → waits for install confirmation → runs Env Pre-flight (including tweaks/COF) → hands scenarios to Navigator → Navigator/Device Controller loop runs until all scenario steps complete → evidence (logs + screenshots) collected in parallel</li><li><b>Validation</b> — Feeds collected evidence + Planner\'s rules to Validator → receives per-rule verdicts → calls Report Generator → stores artifacts → attaches to PR</li></ol><b>Error handling:</b><ul><li>LLM calls (Planner, Generator, Navigator, Validator): retry with backoff, abort after 3 failures</li><li>Build failure: abort immediately, surface error to developer</li><li>Device disconnect: attempt reconnect once, retry current step</li><li>Step timeout: configurable per step type, emit partial report on abort</li></ul><b>Metrics collected per run:</b> wall time per step, LLM token usage per step, retry count, device action count, final status (pass/fail/partial/error), estimated total cost.',
+    inputs: ['Trigger: /validate-pr command or CI event', 'Configuration: timeout limits, token budget, retry policy'],
+    outputs: ['Final report + artifacts attached to PR', 'Run metrics (structured JSON)', 'Status: pass / fail / partial / error'],
+    evolution: [
+      { p:1, l:'Phase 1: Skill prompt chain', t:'Claude Code skill that calls each step sequentially. Basic error handling: retry once, abort on second failure. Metrics logged to local file.' },
+      { p:2, l:'Phase 2: Structured runner', t:'State machine with defined transitions. Parallel steps where possible (e.g., env pre-flight during scenario generation). Per-step timeout and retry config. Structured metrics JSON output.' },
+      { p:3, l:'Phase 3: CI job', t:'Triggered on PR creation. Cost-bounded: hard token budget + time limit. Run history persisted for reliability tracking.' }
+    ]
+  },
+  catalog: {
+    name: 'Scenario & Knowledge Catalog', type: 'Persistent Data Store',
+    desc: 'Unified knowledge base for the testing system. Contains three types of data:<br><br><b>1. Test Scenarios</b> — Reusable YAML definitions with entry points, step sequences, checkpoints, and pass/fail criteria. Two flavors:<ul><li><b>Recorded</b> (via <code>/record-flow</code>): exact coordinates/selectors, replay deterministically without AI</li><li><b>Generated</b> (via AI): intent-based steps, require Flow Navigator AI to interpret</li></ul><b>2. Screen Knowledge</b> — What Snapchat screens look like: screen hierarchy, expected layout per feature, common loading states, dialog patterns, deep link mappings.<br><br><b>3. Element → Code Mappings</b> — Maps UI elements (view IDs, component names, nametags) to their underlying code paths and expected runtime signals. Enables the system to connect "what\'s on screen" to "what code is running."<br><br><b>Sources:</b> <code>/record-flow</code>, <code>/generate-tests</code>, successful validation runs, developer annotations.',
+    inputs: ['New scenarios from Generator', 'Recorded flows from /record-flow', 'Screen knowledge from flow execution', 'Developer annotations'],
+    outputs: ['Scenarios for Generator to select from', 'Screen knowledge + recorded flows for Navigator'],
+    evolution: [
+      { p:1, l:'Phase 1: Local files', t:'YAML files in ~/.claude/test-scenarios/ and memory files for screen knowledge. Small catalog (5-10 scenarios per pilot feature). Per-developer, manually reviewed.' },
+      { p:2, l:'Phase 2: Shared repo', t:'Committed alongside feature code. Team-reviewed and curated. Recorded scenarios grow as teams adopt /record-flow. Screen knowledge shared across team.' },
+      { p:3, l:'Phase 3: Managed catalog', t:'Stale scenarios flagged when replay failures increase. Cross-team sharing. Screen knowledge updated when flow replays detect UI changes.' }
+    ]
+  },
+  planner: {
+    name: 'Planner / Risk Analyzer', type: 'AI Service',
+    desc: 'Reads code changes (modified files, new functions, changed signatures) and traces affected code paths through the codebase — call sites, dependencies, cross-feature interactions. Identifies risk areas: null handling, async boundaries, error branches, state transitions. Outputs a structured risk assessment with validation rules that drive scenario generation.',
+    inputs: ['Code changes (PR diff, modified files)', 'Codebase context (call sites, dependencies)'],
+    outputs: ['Ranked risk areas', 'Validation rules'],
+    evolution: [
+      { p:1, l:'Phase 1: Local Skills', t:'Basic diff reading + code path tracing via Claude Code. Human reviews and confirms risk assessment before proceeding.' },
+      { p:2, l:'Phase 2: Calibrated', t:'Risk analysis calibrated by feedback from pilot runs: past defect locations, known fragile paths, team-annotated risk zones.' },
+      { p:3, l:'Phase 3: CI-integrated', t:'Triggered asynchronously on PR creation. Leverages historical defect data for better risk ranking.' }
+    ]
+  },
+  generator: {
+    name: 'Scenario Generator', type: 'AI Service',
+    desc: 'For each risk area from the Planner, selects an existing scenario from the catalog or generates a new one. Each scenario defines: entry point, step sequence, expected signals (log patterns, UI states), and pass/fail criteria. Leverages screen knowledge from the catalog to produce more accurate scenarios.',
+    inputs: ['Risk assessment + validation rules', 'Scenario & Knowledge Catalog'],
+    outputs: ['Ordered test scenarios', 'Build target specification'],
+    evolution: [
+      { p:1, l:'Phase 1: Mostly generates', t:'Catalog is small — mostly generates new scenarios from scratch. AI reasons about steps and expected signals.' },
+      { p:2, l:'Phase 2: Mostly selects', t:'Catalog grows from pilot runs and recordings. Generator increasingly selects and adapts existing scenarios rather than creating from scratch.' },
+      { p:3, l:'Phase 3: Primarily selection', t:'Large catalog covers most flows. Generator selects relevant scenarios, chains them, fills in PR-specific parameters. New generation only for code paths with no existing coverage.' }
+    ]
+  },
+  navigator: {
+    name: 'Flow Navigator', type: 'AI Service (heaviest AI consumer — primary optimization target)',
+    desc: 'Drives the device through scenario steps. Has two modes:<br><br><b>Recorded scenarios:</b> Replays steps deterministically via Device Controller. No AI reasoning needed. Primary path as catalog grows.<br><br><b>Generated scenarios:</b> Interprets intent-based steps by reading live UI state (tree + screenshot) and deciding concrete actions. Uses screen knowledge from catalog to understand "what am I looking at."<br><br><b>Variance handling:</b> When UI doesn\'t match expectations (loading states, animations, unexpected dialogs), AI reasons about what to do.',
+    inputs: ['Scenarios from Generator', 'Screen knowledge from Catalog', 'Live device state'],
+    outputs: ['Device actions (tap, swipe, input)', 'Evidence capture triggers'],
+    evolution: [
+      { p:1, l:'Phase 1: AI-heavy', t:'Most scenarios are AI-generated — Navigator reasons about every step. Each action requires: "what\'s on screen → what should I tap → did it work?" Expensive per run.' },
+      { p:2, l:'Phase 2: Mixed', t:'Teams record critical flows via /record-flow. Recorded scenarios replay deterministically — no AI needed. AI only activates for unrecorded paths and variance handling.' },
+      { p:3, l:'Phase 3: Mostly deterministic', t:'Most common flows covered by recorded scenarios. AI reserved as a thin fallback for novel screens or unexpected UI changes.' }
+    ]
+  },
+  validator: {
+    name: 'Validator / Assessor', type: 'AI Service',
+    desc: 'Evaluates collected evidence (logs, screenshots, timing) against validation rules from the Planner. For each rule, produces a verdict (pass/fail/inconclusive) with supporting evidence.',
+    inputs: ['Structured logs + sequence matches', 'Screenshots + diff scores', 'Validation rules from Planner'],
+    outputs: ['Per-rule verdicts with evidence', 'Overall assessment'],
+    evolution: [
+      { p:1, l:'Phase 1: AI judges all', t:'AI interprets all results. Rules are loosely defined. Human confirms verdicts for high-risk flows.' },
+      { p:2, l:'Phase 2: Hybrid', t:'Many validations become deterministic: exact regex matches on logs, pixel-diff thresholds on screenshots, timing bounds. AI handles ambiguous patterns.' },
+      { p:3, l:'Phase 3: Growing deterministic share', t:'Growing portion of rules handled deterministically. AI handles complex judgments: cross-feature interactions, novel failure patterns. Human review still required for high-risk verdicts.' }
+    ]
+  },
+  build: {
+    name: 'Build & Install', type: 'Deterministic Service',
+    desc: 'Builds APK/IPA and installs on target device. Handles build variant selection, incremental builds, and installation verification.',
+    inputs: ['Build target from Scenario Generator'], outputs: ['APK installed on device'],
+    evolution: [
+      { p:1, l:'Phase 1: Script', t:'Shell script wrapping bzl build + adb install. Local builds only.' },
+      { p:2, l:'Phase 2: MCP Tool', t:'MCP tool with stable API. Versioned independently. Testable without AI layer.' },
+      { p:3, l:'Phase 3: Containerized', t:'Consumes CI build artifacts. Parallel installs on device farm.' }
+    ]
+  },
+  env: {
+    name: 'Env Pre-flight', type: 'Deterministic Service',
+    desc: 'Verifies device connectivity, app version, permissions, screen state, network. Sets required tweaks/COF flags for the test scenario. Fails fast with actionable errors.',
+    inputs: ['Device connection', 'Required tweaks/COF from scenario'], outputs: ['Device ready (with correct config) or actionable error'],
+    evolution: [
+      { p:1, l:'Phase 1: Script', t:'ADB checks: device connected, app version, permissions, screen unlocked, network. Set tweaks/COF flags required by scenario.' },
+      { p:2, l:'Phase 2: MCP Tool', t:'Auto-remediate common issues (grant permissions, unlock screen). Structured health report. Tweaks/COF set via MCP.' },
+      { p:3, l:'Phase 3: Containerized', t:'Cloud emulator provisioning. Device farm allocation.' }
+    ]
+  },
+  device: {
+    name: 'Device Controller', type: 'Deterministic Service',
+    desc: 'Low-level device actions: tap, swipe, key events, deep links, UI hierarchy dumps. Stateless — each call is independent.',
+    inputs: ['UI actions from Flow Navigator'], outputs: ['Action results + UI state'],
+    evolution: [
+      { p:1, l:'Phase 1: Script', t:'Thin wrapper around ADB/idb commands. Stateless.' },
+      { p:2, l:'Phase 2: MCP Tool', t:'Higher-level actions: "tap element with text X", "wait for element Y". Encapsulates retry logic. Recorded scenarios call this directly.' },
+      { p:3, l:'Phase 3: Containerized', t:'Supports local ADB and remote device farm protocols. Same interface for both.' }
+    ]
+  },
+  log: {
+    name: 'Log Collector & Parser', type: 'Deterministic Service',
+    desc: 'Clears logcat, captures logs, filters by tags/patterns, validates sequences and timing.',
+    inputs: ['Logcat stream from device'], outputs: ['Structured logs with match results'],
+    evolution: [
+      { p:1, l:'Phase 1: Script', t:'adb logcat -c + capture + grep/regex. Basic sequence matching.' },
+      { p:2, l:'Phase 2: MCP Tool', t:'Structured output per pattern. Complex sequence validation with timing windows. Machine-readable.' },
+      { p:3, l:'Phase 3: Containerized', t:'Remote logcat streaming. Multi-device log aggregation.' }
+    ]
+  },
+  screenshot: {
+    name: 'Screenshot & Comparator', type: 'Deterministic Service',
+    desc: 'Captures screenshots at checkpoints. Compares against references using pixel-diff with configurable threshold.',
+    inputs: ['Capture triggers', 'Reference images'], outputs: ['Screenshots + diff scores'],
+    evolution: [
+      { p:1, l:'Phase 1: Script', t:'screencap + pull. Basic pixel diff. Primarily navigation aid for AI.' },
+      { p:2, l:'Phase 2: MCP Tool', t:'Structured output: screenshot + similarity score + highlighted diff region. Reference image management.' },
+      { p:3, l:'Phase 3: Containerized', t:'Cross-device comparison with screen size normalization.' }
+    ]
+  },
+  report: {
+    name: 'Report Generator', type: 'Deterministic Service',
+    desc: 'Assembles validation artifacts into standardized HTML report. Stores scenarios and test cases for reuse.',
+    inputs: ['Verdicts from Validator', 'Scenario metadata'], outputs: ['HTML report', 'Scenario YAML files', 'PR attachment'],
+    evolution: [
+      { p:1, l:'Phase 1: Script', t:'Template-based HTML. Local filesystem. Manual PR attachment.' },
+      { p:2, l:'Phase 2: MCP Tool', t:'Auto-upload to shared storage. Consistent format across runs.' },
+      { p:3, l:'Phase 3: Containerized', t:'Auto-attach to PRs via GitHub API.' }
+    ]
+  },
+  artifacts: {
+    name: 'Artifact Storage', type: 'Output',
+    desc: 'Where validation outputs are persisted: HTML reports, scenario YAMLs, screenshots, logs.',
+    inputs: ['Reports and test cases'], outputs: ['PR attachments'],
+    evolution: [
+      { p:1, l:'Phase 1: Local', t:'Local filesystem. Manual sharing.' },
+      { p:2, l:'Phase 2: Shared', t:'Auto-upload to shared storage. Consistent URLs.' },
+      { p:3, l:'Phase 3: Integrated', t:'Auto-attach to PRs. Queryable run history.' }
+    ]
+  },
+  pr: { name: 'Code Changes', type: 'External Input', desc: 'The PR diff — modified files, added/removed lines, changed function signatures. Primary trigger for the validation pipeline.', inputs: [], outputs: ['Changed code → Planner'], evolution: [] },
+  codebase: { name: 'Codebase Context', type: 'External Input', desc: 'The surrounding codebase beyond the diff: call sites that depend on modified code, upstream/downstream dependencies, related feature modules.', inputs: [], outputs: ['Call sites + dependencies → Planner'], evolution: [] },
+  'infra-device': { name: 'Device / Emulator', type: 'Infrastructure', desc: 'Physical device or emulator where the app runs.', inputs: ['ADB commands'], outputs: ['Logcat, screenshots, UI hierarchy'], evolution: [
+    {p:1,l:'Phase 1',t:'Local USB device or emulator.'},{p:2,l:'Phase 2',t:'Same, via MCP Device Controller.'},{p:3,l:'Phase 3',t:'Remote device farm. Multiple devices in parallel.'}
+  ]},
+  'infra-ci': { name: 'CI/CD Pipeline', type: 'Infrastructure (future)', desc: 'Trigger validation runs on PR creation.', inputs: ['PR events'], outputs: ['Trigger → Orchestrator'], evolution: [
+    {p:1,l:'Phase 1',t:'Not active.'},{p:2,l:'Phase 2',t:'Manual CI trigger option.'},{p:3,l:'Phase 3',t:'Automated on PR creation. Non-blocking. Cost-bounded.'}
+  ]},
+  'infra-farm': { name: 'Device Farm', type: 'Infrastructure (future)', desc: 'Cloud devices for parallel execution.', inputs: ['Build artifacts, scenarios'], outputs: ['Results'], evolution: [
+    {p:1,l:'Phase 1',t:'Not active.'},{p:2,l:'Phase 2',t:'PoC with single device type.'},{p:3,l:'Phase 3',t:'Multiple device types. Parallel runs. Session management.'}
+  ]}
+};
+
+/* ─── Feedback loop data ─── */
+const LOOPS = {
+  orchestrator: {
+    produces: 'Pipeline execution + structured run metrics',
+    memory: null,
+    signals: [
+      'Per-step timing — which steps are bottlenecks?',
+      'Error frequency per step type — where does the pipeline break?',
+      'Retry success rate — are retries effective or wasteful?',
+      'Token cost vs budget — are we within cost bounds?'
+    ],
+    improves: 'Timeout and retry policies tuned per step type. Steps that consistently succeed get shorter timeouts. Parallel execution opportunities identified from timing data (e.g., env pre-flight during scenario generation).'
+  },
+  catalog: {
+    produces: 'Scenarios + screen knowledge served to Generator and Navigator',
+    memory: null,
+    signals: [
+      'Scenario pass/fail rates — which scenarios are reliable vs flaky?',
+      'Replay failure detection — UI changed and recorded flow broke?',
+      'Coverage gap analysis — Planner flagged risks with no matching scenario?',
+      'New /record-flow recordings — teams recording new critical paths?',
+      'Developer annotations — new screen knowledge or code mappings added?'
+    ],
+    improves: 'High-reliability scenarios promoted for reuse. Stale scenarios flagged when replay failures increase. Coverage gaps trigger new recording/generation. Screen knowledge enriched from every successful run.'
+  },
+  planner: {
+    produces: 'Risk assessment + validation rules',
+    memory: 'fail/flaw case memory → revise prompt',
+    signals: [
+      'Validator verdicts — was the predicted risk level accurate?',
+      'Run outcomes — did flagged risks actually cause failures?',
+      'Developer overrides — which risk assessments were manually corrected?',
+      'Historical defect locations — where have real bugs appeared before?'
+    ],
+    improves: 'Risk weighting calibrated by real outcomes. Code paths that repeatedly pass get lower risk priority. Areas with past defects or developer corrections get higher risk. Fewer false alarms, fewer missed risks.'
+  },
+  generator: {
+    produces: 'Test scenarios + build target',
+    memory: 'fail/flaw case memory → revise prompt',
+    signals: [
+      'Run results — did the scenario execute successfully end-to-end?',
+      'Scenario flakiness — does it produce inconsistent pass/fail?',
+      '/record-flow recordings — team recorded a deterministic version?',
+      'Catalog coverage — is there already a good scenario for this risk area?'
+    ],
+    improves: 'Successful scenarios added to catalog for reuse next time. Flaky scenarios refined (tighter checkpoints, better timing) or replaced. As catalog grows, generation shifts from "create from scratch" to "select + adapt existing."'
+  },
+  navigator: {
+    produces: 'Device actions executed + evidence capture triggers',
+    memory: 'fail/flaw case memory → revise prompt',
+    signals: [
+      '/record-flow recordings — new deterministic replay paths added by team',
+      'Screen knowledge from successful navigation — what does each screen look like?',
+      'UI variance patterns — what unexpected states were encountered?',
+      'Action success/failure — which taps/swipes worked, which missed?'
+    ],
+    improves: 'Each recorded flow removes need for AI reasoning on that path. Screen knowledge maps grow so Navigator knows "what am I looking at" without re-reasoning. Common variance patterns (loading spinners, permission dialogs) get deterministic handlers.'
+  },
+  validator: {
+    produces: 'Per-rule verdicts (pass/fail/inconclusive) + overall assessment',
+    memory: 'fail/flaw case memory → revise prompt',
+    signals: [
+      'Human confirmation/override — was the AI verdict correct?',
+      'Deterministic rule success rate — do regex/diff rules match accurately?',
+      'False positive rate — are we flagging things that are actually fine?',
+      'Novel failure patterns — new types of failures not seen before?'
+    ],
+    improves: 'High-confidence rules graduate from AI judgment to deterministic checks (exact regex, pixel threshold). Verdict criteria sharpened by human corrections. Novel failure patterns documented so future runs recognize them.'
+  },
+  build: {
+    produces: 'APK installed on device',
+    memory: null,
+    signals: [
+      'Build success/failure patterns — which targets fail most?',
+      'Build time data — is it getting slower?',
+      'Common failure root causes — missing deps? config issues?'
+    ],
+    improves: 'Error messages become more actionable. Common failures get auto-fix suggestions. Script hardens into stable MCP tool with versioned API.'
+  },
+  env: {
+    produces: 'Device ready (with tweaks/COF set) or actionable error',
+    memory: null,
+    signals: [
+      'Pre-flight failure patterns — what breaks most often?',
+      'Auto-remediation success rate — does auto-fix actually work?',
+      'New tweaks/COF requirements — scenarios need new configurations?'
+    ],
+    improves: 'Common failures get auto-fix rules (grant permissions, unlock screen). Tweaks/COF configurations cataloged per feature area. Setup time decreases as remediation coverage grows.'
+  },
+  device: {
+    produces: 'Action results + UI state',
+    memory: null,
+    signals: [
+      'Action failure rates — which actions fail most?',
+      'Retry patterns — does retry fix the issue?',
+      'New UI element types — elements not handled by current finders?'
+    ],
+    improves: 'Higher-level actions added (e.g., "tap element with text X" instead of raw coordinates). Retry logic tuned per action type. New element finders added for new UI patterns.'
+  },
+  log: {
+    produces: 'Structured logs with match results',
+    memory: null,
+    signals: [
+      'Pattern match accuracy — did regex find the right log entries?',
+      'New log patterns from runs — new tags/formats discovered?',
+      'Timing window accuracy — are sequence windows too tight or loose?'
+    ],
+    improves: 'Pattern library grows per feature area. Timing windows tuned from real data. New log tags added when new features onboard.'
+  },
+  screenshot: {
+    produces: 'Screenshots + diff scores',
+    memory: null,
+    signals: [
+      'False positive diffs — UI changed but functionally correct?',
+      'New reference images from passing runs',
+      'Threshold accuracy — too sensitive or too lenient?'
+    ],
+    improves: 'Reference images updated from successful runs. Thresholds tuned per screen type. Known-acceptable changes (e.g., timestamp) whitelisted.'
+  },
+  report: {
+    produces: 'HTML report + scenario YAML artifacts',
+    memory: null,
+    signals: [
+      'Developer feedback — is the report useful? What\'s missing?',
+      'Auto-attachment success — did the PR comment work?',
+      'Report consumption patterns — which sections do devs read?'
+    ],
+    improves: 'Template improved based on what devs actually look at. Report structure evolves to surface the most useful information first.'
+  }
+};
+
+function renderLoop(id) {
+  const L = LOOPS[id]; if (!L) return '';
+  let h = '<h3>Evolution feedback loop</h3>';
+  h += '<div class="evo-loop">';
+  h += `<div class="evo-box produces"><span class="elabel">Produces each run</span>${L.produces}`;
+  if (L.memory) h += `<br><span class="evo-mem">${L.memory}</span>`;
+  h += '</div>';
+  h += '<div class="evo-arrow">▼</div>';
+  h += '<div class="evo-box feedback"><span class="elabel">Feedback signals</span>';
+  L.signals.forEach(s => { h += `<div class="sig">${s}</div>`; });
+  h += '</div>';
+  h += '<div class="evo-arrow">▼</div>';
+  h += `<div class="evo-box improves"><span class="elabel">Drives improvement</span>${L.improves}</div>`;
+  h += '</div>';
+  return h;
+}
+
+/* ─── Orchestrator toggle ─── */
+let orchActive = false;
+function toggleOrch() {
+  orchActive = !orchActive;
+  document.body.classList.toggle('orch-active', orchActive);
+  document.getElementById('orchBtn').classList.toggle('active', orchActive);
+  if (orchActive) showDetail('orchestrator');
+}
+
+/* ─── Detail panel ─── */
+let currentId = null;
+function showDetail(id) {
+  const d = D[id]; if (!d) return;
+  currentId = id;
+  const dp = document.getElementById('dp');
+  dp.classList.add('open');
+  document.querySelectorAll('.component').forEach(c => c.classList.remove('selected'));
+  const el = document.querySelector(`[data-id="${id}"]`); if (el) el.classList.add('selected');
+
+  let h = `<h2>${d.name}</h2><div class="ctype">${d.type}</div><p>${d.desc}</p>`;
+  if (d.inputs?.length) h += `<h3>Inputs</h3><ul>${d.inputs.map(i=>`<li>${i}</li>`).join('')}</ul>`;
+  if (d.outputs?.length) h += `<h3>Outputs</h3><ul>${d.outputs.map(o=>`<li>${o}</li>`).join('')}</ul>`;
+  h += renderLoop(id);
+  if (d.evolution?.length) {
+    h += `<h3>Evolution across phases</h3>`;
+    d.evolution.forEach(e => {
+      h += `<div class="evo p${e.p}"><div class="elabel"><span class="ptag p${e.p}">${e.l}</span></div>${e.t}</div>`;
+    });
+  }
+  document.getElementById('dp-content').innerHTML = h;
+}
+
+function closePanel() {
+  document.getElementById('dp').classList.remove('open');
+  document.querySelectorAll('.component').forEach(c => c.classList.remove('selected'));
+  currentId = null;
+}
+
+/* ─── Pan & Zoom ─── */
+const svg = document.getElementById('mainsvg');
+const BASE_VW = 1800, BASE_VH = 960;
+let vx = 0, vy = 0, vw = BASE_VW, vh = BASE_VH;
+let isPanning = false, panSX, panSY, panVX, panVY;
+
+function updateVB() {
+  svg.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh}`);
+  document.getElementById('zl').textContent = Math.round(BASE_VW / vw * 100) + '%';
+}
+
+svg.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || e.target.closest('.component')) return;
+  isPanning = true;
+  panSX = e.clientX; panSY = e.clientY; panVX = vx; panVY = vy;
+  svg.classList.add('panning');
+  svg.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+svg.addEventListener('pointermove', e => {
+  if (!isPanning) return;
+  const r = svg.getBoundingClientRect();
+  vx = panVX - (e.clientX - panSX) * (vw / r.width);
+  vy = panVY - (e.clientY - panSY) * (vh / r.height);
+  updateVB();
+});
+svg.addEventListener('pointerup', e => {
+  if (!isPanning) return;
+  isPanning = false;
+  svg.classList.remove('panning');
+  svg.releasePointerCapture(e.pointerId);
+});
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY > 0 ? 1.08 : 0.93;
+  const r = svg.getBoundingClientRect();
+  const mx = ((e.clientX - r.left) / r.width) * vw + vx;
+  const my = ((e.clientY - r.top) / r.height) * vh + vy;
+  const nw = Math.min(5000, Math.max(500, vw * factor));
+  const nh = Math.min(3000, Math.max(265, vh * factor));
+  vx = mx - (mx - vx) * (nw / vw);
+  vy = my - (my - vy) * (nh / vh);
+  vw = nw; vh = nh;
+  updateVB();
+}, { passive: false });
+
+function zoomIn() {
+  const mx = vx + vw/2, my = vy + vh/2;
+  const nw = Math.max(500, vw*0.85), nh = Math.max(265, vh*0.85);
+  vx = mx - (mx-vx)*(nw/vw); vy = my - (my-vy)*(nh/vh);
+  vw = nw; vh = nh; updateVB();
+}
+function zoomOut() {
+  const mx = vx + vw/2, my = vy + vh/2;
+  const nw = Math.min(5000, vw*1.18), nh = Math.min(3000, vh*1.18);
+  vx = mx - (mx-vx)*(nw/vw); vy = my - (my-vy)*(nh/vh);
+  vw = nw; vh = nh; updateVB();
+}
+function resetView() { vx=0; vy=0; vw=BASE_VW; vh=BASE_VH; updateVB(); }
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+</script>
+</body>
+</html>
