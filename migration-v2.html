@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ExoPlayer → Media3 Migration Explorer v2</title>
+<style>
+:root{--bg:#0d1117;--s:#161b22;--s2:#1c2333;--bd:#30363d;--t:#e6edf3;--td:#8b949e;--a:#58a6ff;--ad:#1f6feb;--g:#3fb950;--gd:#238636;--y:#d29922;--o:#db6d28;--r:#f85149;--p:#bc8cff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--t);line-height:1.6;font-size:14px}
+.container{max-width:1440px;margin:0 auto;padding:16px}
+a{color:var(--a);text-decoration:none}
+code,.mono{font-family:'SF Mono','Fira Code',monospace;font-size:0.88em}
+.hdr{text-align:center;padding:28px 16px;border-bottom:1px solid var(--bd);margin-bottom:20px}
+.hdr h1{font-size:2em;background:linear-gradient(135deg,var(--a),var(--p));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hdr .sub{color:var(--td);font-size:0.95em;margin-top:4px}
+/* Tabs */
+.main-tabs{display:flex;gap:4px;border-bottom:2px solid var(--bd);margin-bottom:20px;overflow-x:auto;position:sticky;top:0;background:var(--bg);z-index:100;padding:8px 0}
+.main-tabs button{background:var(--s);border:1px solid var(--bd);color:var(--td);padding:8px 18px;border-radius:8px 8px 0 0;cursor:pointer;font-size:0.9em;white-space:nowrap;transition:all .2s}
+.main-tabs button:hover{border-color:var(--a);color:var(--t)}
+.main-tabs button.active{background:var(--ad);border-color:var(--a);color:#fff}
+.tab-panel{display:none}.tab-panel.active{display:block}
+/* Cards */
+.card{background:var(--s);border:1px solid var(--bd);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.card-h{padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none}
+.card-h:hover{background:var(--s2)}
+.chev{transition:transform .2s;color:var(--td);font-size:.85em;flex-shrink:0}
+.card.open .chev{transform:rotate(90deg)}
+.card-title{font-weight:600;flex:1}
+.card-b{display:none;padding:0 16px 16px;border-top:1px solid var(--bd)}
+.card.open .card-b{display:block}
+/* Badges */
+.badge{padding:2px 8px;border-radius:10px;font-size:.75em;font-weight:700;white-space:nowrap}
+.b-done{background:rgba(63,185,80,.2);color:var(--g)}.b-low{background:rgba(63,185,80,.15);color:var(--g)}
+.b-med{background:rgba(210,153,34,.2);color:var(--y)}.b-high{background:rgba(219,109,40,.2);color:var(--o)}
+.b-crit{background:rgba(248,81,73,.2);color:var(--r)}.b-phase{background:rgba(88,166,255,.2);color:var(--a)}
+.b-pkg{background:rgba(188,140,255,.15);color:var(--p)}
+/* File paths */
+.fp{font-family:'SF Mono',monospace;font-size:.82em;color:var(--a);background:rgba(88,166,255,.1);padding:1px 6px;border-radius:3px;display:inline-block;margin:1px 0}
+.cls{font-family:'SF Mono',monospace;font-size:.82em;color:var(--p);background:rgba(188,140,255,.1);padding:1px 6px;border-radius:3px;display:inline-block;margin:1px 0}
+/* Code */
+.codeblk{background:#0d1117;border:1px solid var(--bd);border-radius:6px;padding:10px 14px;font-family:'SF Mono',monospace;font-size:.82em;overflow-x:auto;margin:6px 0;line-height:1.5;white-space:pre}
+/* Actions */
+.act{border-left:3px solid var(--g);padding:8px 12px;border-radius:0 6px 6px 0;margin:6px 0;font-size:.9em;background:rgba(63,185,80,.06)}
+.brk{border-left:3px solid var(--r);padding:8px 12px;border-radius:0 6px 6px 0;margin:6px 0;font-size:.9em;background:rgba(248,81,73,.06)}
+.frk{border-left:3px solid var(--y);padding:8px 12px;border-radius:0 6px 6px 0;margin:6px 0;font-size:.9em;background:rgba(210,153,34,.08)}
+/* Section */
+.sec{margin-top:10px}.sec h4{font-size:.8em;text-transform:uppercase;letter-spacing:.04em;color:var(--td);margin-bottom:4px}
+/* Tables */
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:.88em;margin:10px 0}
+th{background:var(--s2);padding:8px 12px;text-align:left;border-bottom:2px solid var(--bd);color:var(--td);font-weight:600;position:sticky;top:52px}
+td{padding:6px 12px;border-bottom:1px solid var(--bd)}
+tr:hover td{background:rgba(88,166,255,.04)}
+/* Filters */
+.filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.filters input{flex:1;min-width:200px;padding:8px 14px;background:var(--s);border:1px solid var(--bd);border-radius:6px;color:var(--t);font-size:.9em;outline:none}
+.filters input:focus{border-color:var(--a)}
+.filters select{padding:8px 12px;background:var(--s);border:1px solid var(--bd);border-radius:6px;color:var(--t);font-size:.88em;outline:none;cursor:pointer}
+/* Timeline */
+.tl{display:flex;gap:3px;margin:16px 0;flex-wrap:wrap}
+.tl-b{flex:1;min-width:100px;padding:10px;border-radius:6px;text-align:center;cursor:pointer;transition:all .2s;border:1px solid transparent}
+.tl-b:hover{transform:translateY(-2px);border-color:var(--a)}
+.tl-b .ph{font-size:.75em;color:var(--td)}.tl-b .dur{font-size:1em;font-weight:700;margin-top:2px}.tl-b .nm{font-size:.75em;margin-top:2px}
+/* Blast */
+.blast{display:flex;height:26px;border-radius:6px;overflow:hidden;margin:10px 0}
+.blast div{display:flex;align-items:center;justify-content:center;font-size:.7em;font-weight:600}
+/* Layers */
+.layer{display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:6px;margin:3px 0;cursor:pointer;transition:all .2s}
+.layer:hover{transform:translateX(3px)}
+.layer .ln{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:.8em;flex-shrink:0}
+.layer .lname{font-weight:600;min-width:220px}.layer .lclasses{font-size:.82em;color:var(--td)}
+/* Import table */
+.imp-row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(48,54,61,.5)}
+.imp-pkg{flex:1;font-family:'SF Mono',monospace;font-size:.8em}.imp-cnt{color:var(--td);font-size:.82em;min-width:40px;text-align:right}
+.imp-cat{font-size:.75em;padding:1px 6px;border-radius:4px}
+/* Stats grid */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:16px 0}
+.stat{background:var(--s);border:1px solid var(--bd);border-radius:8px;padding:14px;text-align:center}
+.stat .val{font-size:1.8em;font-weight:800}.stat .lbl{font-size:.8em;color:var(--td);margin-top:2px}
+.mini-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:10px 0}
+.mini-card{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px}
+.mini-card h4{font-size:.92em;margin-bottom:6px}
+.mini-card p{font-size:.85em;color:var(--td);margin:0}
+.arch-step{padding:10px 12px;border-radius:8px;margin:6px 0;border:1px solid var(--bd)}
+.arch-step.do-not-swap{background:rgba(248,81,73,.08);border-color:rgba(248,81,73,.3)}
+.arch-step.partial{background:rgba(210,153,34,.08);border-color:rgba(210,153,34,.3)}
+.arch-step.adapter{background:rgba(88,166,255,.08);border-color:rgba(88,166,255,.3)}
+.arch-step.safe{background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.3)}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.74em;font-weight:700;margin-right:6px}
+.pill-red{background:rgba(248,81,73,.18);color:var(--r)}
+.pill-yellow{background:rgba(210,153,34,.18);color:var(--y)}
+.pill-blue{background:rgba(88,166,255,.18);color:var(--a)}
+.pill-green{background:rgba(63,185,80,.18);color:var(--g)}
+.callout{border-left:3px solid var(--a);padding:8px 12px;border-radius:0 6px 6px 0;margin:6px 0;font-size:.9em;background:rgba(88,166,255,.06)}
+ul{padding-left:18px;margin:4px 0}li{margin:2px 0}p{margin:6px 0}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="hdr">
+<h1>ExoPlayer 2.16 → Media3 Migration Explorer</h1>
+<div class="sub">Snap Media Playback Stack — Validated v2 — 429 files · 265 unique imports · 8 phases</div>
+</div>
+
+<!-- Stats -->
+<div class="stats">
+<div class="stat"><div class="val" style="color:var(--a)">429</div><div class="lbl">Files with ExoPlayer imports</div></div>
+<div class="stat"><div class="val" style="color:var(--p)">265</div><div class="lbl">Unique ExoPlayer imports</div></div>
+<div class="stat"><div class="val" style="color:var(--y)">152</div><div class="lbl">ExoV2_16 dead code files</div></div>
+<div class="stat"><div class="val" style="color:var(--g)">20</div><div class="lbl">Media3 imports (Phase 1)</div></div>
+<div class="stat"><div class="val" style="color:var(--o)">5</div><div class="lbl">Fork dependencies</div></div>
+<div class="stat"><div class="val" style="color:var(--r)">1</div><div class="lbl">Critical blocker (codec adapter)</div></div>
+</div>
+
+<!-- Main Tabs -->
+<div class="main-tabs" id="mainTabs">
+<button class="active" onclick="showTab('overview')">Overview</button>
+<button onclick="showTab('architecture')">Architecture</button>
+<button onclick="showTab('components')">Components (39)</button>
+<button onclick="showTab('phases')">Phases (0-8)</button>
+<button onclick="showTab('api')">API Surface (265)</button>
+<button onclick="showTab('blockers')">Blockers & Fork</button>
+<button onclick="showTab('metrics')">Metrics</button>
+</div>
+
+<!-- ============ OVERVIEW TAB ============ -->
+<div class="tab-panel active" id="tab-overview">
+
+<div class="card open"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Migration Strategy</span></div>
+<div class="card-b">
+<p>Two-step migration separating package rename from API evolution. Media3 version in maven: <strong>1.5.1</strong> (corrected from plan's 1.0.2).</p>
+<div style="display:flex;gap:6px;align-items:center;margin:12px 0;flex-wrap:wrap">
+<div style="background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px 16px;text-align:center;min-width:160px"><div style="font-size:1.1em;font-weight:bold;color:var(--a)">ExoPlayer 2.16.1.37</div><div style="font-size:.8em;color:var(--td)">Snap fork (5 patches)</div><div style="font-size:.75em;color:var(--td);margin-top:2px"><code>com.google.android.exoplayer2.*</code></div></div>
+<div style="font-size:1.5em;color:var(--a)">→</div>
+<div style="background:var(--s2);border:2px solid var(--a);border-radius:8px;padding:10px 16px;text-align:center;min-width:160px"><div style="font-size:1.1em;font-weight:bold;color:var(--a)">Media3 1.5.1</div><div style="font-size:.8em;color:var(--td)">Upstream + rewrite fork deps</div><div style="font-size:.75em;color:var(--td);margin-top:2px"><code>androidx.media3.*</code></div></div>
+</div>
+<div class="frk"><strong>Correction:</strong> Maven deps already declare Media3 <code>1.5.1</code>, not <code>1.0.2</code>. The two-step approach (1.0 first → upgrade) may be unnecessary if 1.5.1 already compiles. Validate <code>TrackGroupArray</code> usage before deciding.</div>
+</div></div>
+
+<div class="card open"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Architecture Layers</span></div>
+<div class="card-b">
+<p style="color:var(--td);margin-bottom:8px">A/B boundary at <strong>MediaPlayerInterface</strong> (Layer 4). Everything above is ExoPlayer-agnostic.</p>
+<div class="layer" style="background:rgba(188,140,255,.08)"><div class="ln" style="background:var(--p);color:#000">5</div><div class="lname">Opera / Features / Consumers</div><div class="lclasses"><span class="cls">VideoLayer</span> <span class="cls">CodecPreConfigurePlugin</span> <span class="cls">DefaultAudioPlaybackSessionImpl</span></div></div>
+<div class="layer" style="background:rgba(88,166,255,.12);border:1px solid var(--ad);border-radius:8px"><div class="ln" style="background:var(--a);color:#000">4</div><div class="lname">MediaPlayerInterface ← A/B</div><div class="lclasses"><span class="cls">MediaPlayerFactoryImpl</span> <span class="cls">PlaybackEngineSelector</span></div></div>
+<div class="layer" style="background:rgba(63,185,80,.08)"><div class="ln" style="background:var(--g);color:#000">3</div><div class="lname">Player Implementations</div><div class="lclasses"><span class="cls">Media3MediaPlayer</span> <span class="cls">ExoMediaPlayer</span> <span class="cls">UnifiedMediaPlayer</span></div></div>
+<div class="layer" style="background:rgba(210,153,34,.08)"><div class="ln" style="background:var(--y);color:#000">2</div><div class="lname">Renderers & Codec Factories</div><div class="lclasses"><span class="cls">DefaultSnapRenderersFactory</span> <span class="cls">SnapMediaCodecAdapterFactory</span> <span class="cls">ScVideoRenderer</span></div></div>
+<div class="layer" style="background:rgba(219,109,40,.08)"><div class="ln" style="background:var(--o);color:#000">1</div><div class="lname">Codec Pool & Cache</div><div class="lclasses"><span class="cls">CodecPoolImpl</span> <span class="cls">ExoCacheProvider</span> <span class="cls">SimpleCache</span></div></div>
+<div class="layer" style="background:rgba(248,81,73,.08)"><div class="ln" style="background:var(--r);color:#000">0</div><div class="lname">ExoPlayer / Media3 Artifacts</div><div class="lclasses"><code style="color:var(--td)">com.google.android.exoplayer2.*</code> → <code style="color:var(--a)">androidx.media3.*</code></div></div>
+</div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Timeline</span></div>
+<div class="card-b">
+<div class="tl">
+<div class="tl-b" style="background:rgba(63,185,80,.12)" onclick="showTab('phases')"><div class="ph">P0</div><div class="dur">1-2w</div><div class="nm">Foundation</div></div>
+<div class="tl-b" style="background:rgba(63,185,80,.12)" onclick="showTab('phases')"><div class="ph">P1</div><div class="dur">2-3w</div><div class="nm">Player</div></div>
+<div class="tl-b" style="background:rgba(210,153,34,.1)" onclick="showTab('phases')"><div class="ph">P2</div><div class="dur">3-4w</div><div class="nm">DataSources</div></div>
+<div class="tl-b" style="background:rgba(219,109,40,.1)" onclick="showTab('phases')"><div class="ph">P3</div><div class="dur">4-6w</div><div class="nm">Renderers</div></div>
+<div class="tl-b" style="background:rgba(219,109,40,.1)" onclick="showTab('phases')"><div class="ph">P4</div><div class="dur">3-4w</div><div class="nm">ABR</div></div>
+<div class="tl-b" style="background:rgba(219,109,40,.1)" onclick="showTab('phases')"><div class="ph">P5</div><div class="dur">2-3w</div><div class="nm">dav1d</div></div>
+<div class="tl-b" style="background:rgba(210,153,34,.1)" onclick="showTab('phases')"><div class="ph">P6</div><div class="dur">2-3w</div><div class="nm">Consumers</div></div>
+<div class="tl-b" style="background:rgba(63,185,80,.1)" onclick="showTab('phases')"><div class="ph">P7</div><div class="dur">3-4w</div><div class="nm">Cleanup</div></div>
+</div>
+<p style="color:var(--td);font-size:.85em;text-align:center">Total: ~20-29 weeks (~5-7 months)</p>
+</div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Blast Radius — 429 Files</span></div>
+<div class="card-b">
+<div class="blast">
+<div style="width:72%;background:var(--ad)" title="platform/media/playback/ — 309 files">playback/ — 309</div>
+<div style="width:11.4%;background:var(--o)" title="media-engine — 49 files">engine 49</div>
+<div style="width:4.9%;background:var(--y)" title="opera — 21 files">opera</div>
+<div style="width:4%;background:var(--p)" title="decoders — 17 files">dec</div>
+<div style="width:2.3%;background:var(--g)" title="lenses — 10 files">len</div>
+<div style="width:5.4%;background:#555" title="other — 23 files">other</div>
+</div>
+<div style="display:flex;gap:14px;font-size:.82em;color:var(--td);flex-wrap:wrap">
+<span><span style="color:var(--a)">■</span> playback/ 309</span>
+<span><span style="color:var(--o)">■</span> media-engine 49</span>
+<span><span style="color:var(--y)">■</span> opera 21</span>
+<span><span style="color:var(--p)">■</span> decoders 17</span>
+<span><span style="color:var(--g)">■</span> lenses 10</span>
+<span><span style="color:#555">■</span> cheerios/devices/messaging/music 23</span>
+</div>
+</div></div>
+</div>
+
+<!-- ============ ARCHITECTURE TAB ============ -->
+<div class="tab-panel" id="tab-architecture">
+<p style="color:var(--td);margin-bottom:12px">This tab focuses on the real swap boundary around <code>ScExoPlayer</code>, the wrappers above it, the lower-level playback graph below it, and the risks of deleting legacy code too early.</p>
+
+<div class="card open"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Architecture Companion</span></div>
+<div class="card-b">
+<div class="callout"><strong>Companion page:</strong> <a href="file:///Users/myu/Documents/diagrams/system-architecture-interactive.html">file:///Users/myu/Documents/diagrams/system-architecture-interactive.html</a>. Use it for the full interactive stack graph, per-component dependency drill-down, nested dependency trees, and function-by-function rewrite maps.</div>
+<div class="mini-grid">
+<div class="mini-card"><h4>What this tab answers</h4><p>Can we swap <code>ScExoPlayer</code> for Media3 directly? Which wrappers make that unsafe? Which files only look dead?</p></div>
+<div class="mini-card"><h4>What the companion page adds</h4><p>Interactive component tabs, nested dependency trees, current-vs-target comparisons, and explicit "manual judgement required" lists.</p></div>
+<div class="mini-card"><h4>Key correction</h4><p><code>MediaPlayerInterface</code> is not yet a truthful parity boundary because advanced behaviors are optional or no-op on some implementations.</p></div>
+</div>
+</div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Dead Code Deletion Risk Analysis</span></div>
+<div class="card-b">
+<table>
+<tr><th>Bucket</th><th>What looks dead</th><th>Why deletion is risky</th><th>Precondition before deletion</th><th>Risk</th></tr>
+<tr><td>Build-coupled legacy</td><td><code>*ExoV2_16</code> mirrors, shadowed deps, dual BUILD entries</td><td>They still participate in the compile graph and preserve old API/package compatibility. Deleting early breaks build targets before runtime routing is removed.</td><td>Remove all references from BUILD files and runtime factories first.</td><td><span class="pill pill-red">Critical</span></td></tr>
+<tr><td>Behaviorally hidden legacy</td><td>Opera wrappers, audio replacement helpers, cache-aware ABR helpers</td><td>These look like wrappers but encode product behavior: alternate audio, voiceover layering, cache preference, renderer config flow, and player selection heuristics.</td><td>Parity proven on real product flows, not just compile success.</td><td><span class="pill pill-red">Critical</span></td></tr>
+<tr><td>Observability legacy</td><td>Analytics listeners, event loggers, playback timeline listeners</td><td>Deleting them early removes the very telemetry needed to prove migration safety. A path can still "work" while becoming unmeasurable.</td><td>Metrics parity and replacement observers shipped first.</td><td><span class="pill pill-yellow">High</span></td></tr>
+<tr><td>Factory/routing legacy</td><td><code>MediaPlayerFactoryImpl</code> fallback logic, timeline player selection, feature-tag routing</td><td>If the fallback path is removed before eligibility routing and capability checks are added, unsupported requests silently flow into incomplete Media3 behavior.</td><td>Capability model + selector + allowlist rollout in place.</td><td><span class="pill pill-red">Critical</span></td></tr>
+<tr><td>Tests and debug helpers</td><td>Legacy tests, debug-only listeners, state capture helpers</td><td>They often appear unused in production but protect parity and regression detection during rollout.</td><td>Equivalent Media3 validation coverage and debug visibility exist.</td><td><span class="pill pill-yellow">High</span></td></tr>
+<tr><td>Actually safe late cleanup</td><td>Pure package-shim files, duplicate imports, shadowed artifacts after cutover</td><td>These are the only "easy deletes," but only after the runtime path, metrics, and build graph no longer depend on them.</td><td>Media3 at 100% rollout for a sustained period.</td><td><span class="pill pill-green">Low</span></td></tr>
+</table>
+<div class="brk"><strong>Main deletion mistake to avoid:</strong> deleting "dead" code based on local runtime routing alone. In this repo, deadness has to be proven across <strong>build graph, wrapper behavior, analytics, and consumer modules</strong>.</div>
+<div class="act"><strong>Recommended order:</strong> 1) add truthful capability routing, 2) migrate telemetry, 3) prove consumer parity, 4) remove runtime fallback, 5) remove build deps and mirrored files, 6) delete shadowed <code>v2_16</code> code last.</div>
+</div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Full-Stack Swap Boundary</span></div>
+<div class="card-b">
+<p style="color:var(--td)">The migration is not a single class swap. The real stack is layered, and several layers below and above <code>ScExoPlayer</code> carry behavior that Media3 does not currently reproduce.</p>
+<div class="arch-step do-not-swap"><strong>L5 Consumers and wrappers:</strong> <span class="cls">ScMediaVideoLayerViewController</span>, <span class="cls">OperaScMediaPlayer</span>, <span class="cls">UnifiedMediaPlayer</span>, <span class="cls">TimelinePlayer</span>, <span class="cls">TimelinePlayerV2</span><br><span class="pill pill-red">Do not swap independently</span> These layers assume advanced features like alternate audio, multiple track players, renderer configuration, scrubbing, and timeline-aware behavior.</div>
+<div class="arch-step partial"><strong>L4 Routing and session creation:</strong> <span class="cls">MediaPlayerFactoryImpl</span>, config flags, future engine selector<br><span class="pill pill-yellow">Requires capability-aware routing</span> Current routing is a boolean switch, not a truthful eligibility policy.</div>
+<div class="arch-step do-not-swap"><strong>L3 Player core:</strong> <span class="cls">ScExoPlayer</span>, <span class="cls">ExoMediaPlayer</span>, <span class="cls">Media3MediaPlayer</span><br><span class="pill pill-red">Center of dependency graph</span> <code>ScExoPlayer</code> owns task execution, analytics hooks, media-source integration, renderer messaging, locale/seek/scrubbing/state behavior, and metadata/reporting hooks.</div>
+<div class="arch-step partial"><strong>L2 Playback internals:</strong> <span class="cls">MediaSourceManager</span>, <span class="cls">DefaultSnapRenderersFactory</span>, <span class="cls">SnapMediaCodecAdapterFactory</span>, <span class="cls">CacheBasedTrackSelector</span><br><span class="pill pill-yellow">Mostly not direct swaps</span> Some are public-API package migrations; others are semantic rewrites or fork-dependent.</div>
+<div class="arch-step adapter"><strong>L1 Shared lower-level systems:</strong> <span class="cls">CodecPoolImpl</span>, cache wrappers, some bandwidth helpers<br><span class="pill pill-blue">Often reusable with adapters</span> These are closer to stable public APIs or platform APIs, but still need integration work.</div>
+<div class="arch-step safe"><strong>L0 Library surface:</strong> ExoPlayer vs Media3 packages<br><span class="pill pill-green">Package migration is the easy part</span> Most risk comes from behavior and Snap-specific customizations, not the import rename itself.</div>
+</div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Swapability Matrix</span></div>
+<div class="card-b">
+<table>
+<tr><th>Component</th><th>Direct dependencies</th><th>Swap label</th><th>Why it is not a simple swap</th><th>Risk</th></tr>
+<tr><td><span class="cls">MediaPlayerFactoryImpl</span></td><td>Config flag, timeline players, Media3 player, UnifiedMediaPlayer</td><td><span class="pill pill-yellow">Requires selector</span></td><td>Currently routes with a boolean. Needs per-request eligibility, reason logging, and consumer-aware guardrails.</td><td>High</td></tr>
+<tr><td><span class="cls">UnifiedMediaPlayer</span></td><td><code>TimelinePlayerInterface</code>, state machine, media model parser, asset loader</td><td><span class="pill pill-red">Do not swap independently</span></td><td>Delegates to timeline player but also orchestrates state transitions, asset/model prep, and scheduling.</td><td>High</td></tr>
+<tr><td><span class="cls">TimelinePlayer</span></td><td>Multiple <code>ScExoPlayer</code> instances, media composition, OpenGL handler</td><td><span class="pill pill-red">Do not swap independently</span></td><td>Multi-player coordination and audio/video split behavior are tied to <code>ScExoPlayer</code> semantics.</td><td>High</td></tr>
+<tr><td><span class="cls">TimelinePlayerV2</span></td><td>Dynamic player holders, feature-tagged audio tracks, multiple <code>ScExoPlayer</code>s</td><td><span class="pill pill-red">Do not swap independently</span></td><td>Even more coupled than <code>TimelinePlayer</code>; manages several feature-tagged audio/video players.</td><td>High</td></tr>
+<tr><td><span class="cls">OperaScMediaPlayer</span></td><td><code>MediaPlayerInterface</code>, alternate audio, audio media, mute semantics</td><td><span class="pill pill-blue">Swappable with adapter</span></td><td>Only if the underlying player actually supports the advanced audio paths it forwards.</td><td>Medium</td></tr>
+<tr><td><span class="cls">ScExoPlayer</span></td><td>PlaybackComponents, MediaSourceManager, executor, analytics, renderers</td><td><span class="pill pill-red">Requires redesign</span></td><td>This is the real behavioral nucleus, not just a class wrapper around ExoPlayer.</td><td>Critical</td></tr>
+<tr><td><span class="cls">MediaSourceManager</span></td><td>MediaSourceFactory, concatenation, merging, alternate audio composition</td><td><span class="pill pill-yellow">Requires partial rewrite</span></td><td>Public API usage is stable, but playlist/audio-source composition semantics need careful parity validation.</td><td>High</td></tr>
+<tr><td><span class="cls">DefaultSnapRenderersFactory</span></td><td>Custom renderers, audio sink, codec adapter factory</td><td><span class="pill pill-blue">Swappable with adapter</span></td><td>Works if Media3 renderers and codec adapter factories are ported first.</td><td>Medium</td></tr>
+<tr><td><span class="cls">SnapMediaCodecAdapterFactory</span></td><td>Codec pool, async/sync factories</td><td><span class="pill pill-blue">Swappable with adapter</span></td><td>Public interface is stable, but async implementation remains the hard blocker.</td><td>Medium</td></tr>
+<tr><td><span class="cls">AsyncMediaCodecAdaptorFactory</span></td><td>Forked async adapter internals</td><td><span class="pill pill-red">Requires redesign</span></td><td>Cannot be ported as-is to upstream Media3. Needs a fresh implementation.</td><td>Critical</td></tr>
+<tr><td><span class="cls">CacheBasedTrackSelector</span></td><td>Track selection APIs, DASH metadata, cache status</td><td><span class="pill pill-yellow">Requires partial rewrite</span></td><td><code>TrackGroupArray</code> removal in Media3 1.5 makes direct porting impossible.</td><td>High</td></tr>
+<tr><td><span class="cls">CacheBasedAdaptiveTrackSelection</span></td><td>Fork-only <code>updateSelectedIndex()</code></td><td><span class="pill pill-yellow">Requires partial rewrite</span></td><td>Must own selection logic or use reflection; direct fork behavior does not exist upstream.</td><td>High</td></tr>
+<tr><td><span class="cls">Media3MediaPlayer</span></td><td>DefaultTrackSelector, DefaultDataSource, simple Media3 player callbacks</td><td><span class="pill pill-green">Direct simple-player swap only</span></td><td>Safe only for narrow/simple playback flows. Not a drop-in replacement for the `ScExoPlayer` stack yet.</td><td>Medium</td></tr>
+</table>
+</div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">ScExoPlayer Deep Dive</span></div>
+<div class="card-b">
+<div class="sec"><h4>Core files in the chain</h4>
+<span class="fp">playback/core/player/ScExoPlayerFactory.kt</span> → builds <span class="cls">ScExoPlayer</span> with a fresh <span class="cls">MediaSourceManager</span><br>
+<span class="fp">playback/core/player/ScExoPlayer.kt</span> → task executor + ExoPlayer wrapper + analytics + renderer + track/source coordination<br>
+<span class="fp">playback/core/player/MediaSourceManager.kt</span> → playlist composition, alternate audio, concatenation/merging, media source mutation
+</div>
+<div class="sec"><h4>Direct dependencies that matter semantically</h4>
+<ul>
+<li><strong>PlaybackComponents:</strong> renderers factory, track selector, load control, bandwidth meter, media source factory.</li>
+<li><strong>MediaSourceManager:</strong> not just "source creation" but playlist mutation, alternate audio injection, merging, and clipping behavior.</li>
+<li><strong>Task executor/threading:</strong> almost every mutating method is marshalled through a dedicated executor instead of calling the player directly.</li>
+<li><strong>Analytics/reporting:</strong> <code>PlayerAnalyticsListener</code>, timeline listeners, debug listeners, and player context reporting.</li>
+<li><strong>Renderer message bus:</strong> renderer configuration, renderer component injection, playback looper messaging, experiment config, renderer listener setup.</li>
+</ul></div>
+<div class="sec"><h4>Why replacing it with current Media3 is unsafe</h4>
+<ul>
+<li>Current <span class="cls">Media3MediaPlayer</span> does not implement renderer configuration, renderer component injection, scrubbing mode, preferred locale, media metadata provider, or alternate audio routing.</li>
+<li><code>ScExoPlayer</code> exposes timeline-aware methods like absolute position and segment-aware seeking that the current Media3 path does not.</li>
+<li><code>ScExoPlayer</code> is integrated with cache-aware track selection, bandwidth/debug hooks, playback analytics, and richer error handling.</li>
+<li>Several wrapper layers assume those capabilities are real, not optional.</li>
+</ul></div>
+<div class="brk"><strong>Bottom line:</strong> the current Media3 path is a <em>simple player implementation</em>. <code>ScExoPlayer</code> is a <em>platform subsystem</em>.</div>
+</div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Function-Level Rewrite Heatmap</span></div>
+<div class="card-b">
+<table>
+<tr><th>Function area</th><th>ScExoPlayer</th><th>Current Media3MediaPlayer</th><th>Migration judgement</th><th>Risk</th></tr>
+<tr><td>Basic lifecycle</td><td><code>setSurface</code>, <code>setMedia</code>, <code>prepareAsync</code>, <code>start/pause/stop/release</code></td><td>Implemented</td><td>Good starting point, but callback timing and threading semantics still need parity validation.</td><td>Medium</td></tr>
+<tr><td>Analytics session</td><td><code>setPlaybackAnalyticsSession</code> wires timeline listener</td><td>No-op placeholder</td><td>Must be implemented before any meaningful A/B.</td><td>High</td></tr>
+<tr><td>Renderer configuration</td><td><code>setRendererConfiguration</code></td><td>Not implemented</td><td>Required for many advanced flows and custom renderer use cases.</td><td>High</td></tr>
+<tr><td>Renderer component injection</td><td><code>setRendererComponent</code></td><td>Not implemented</td><td>Needs explicit replacement strategy or capability gating.</td><td>High</td></tr>
+<tr><td>Scrubbing / seek semantics</td><td><code>setScrubbingMode</code>, <code>setSeekMode</code>, <code>seekToAbsolutePosition</code>, <code>seekToInSegment</code></td><td>Only simple <code>seekTo</code></td><td>Semantic rewrite, not API rename.</td><td>High</td></tr>
+<tr><td>Alternate audio / audio track</td><td><code>setAlternateAudioSource</code>, <code>setAudioTrack</code></td><td>Not implemented</td><td>Critical for Opera music/voiceover replacement paths.</td><td>Critical</td></tr>
+<tr><td>Locale / subtitle behavior</td><td><code>setPreferredLocale</code></td><td>Not implemented</td><td>Small API surface, but user-visible behavior.</td><td>Medium</td></tr>
+<tr><td>Metadata/reporting</td><td><code>setMediaMetadataProvider</code>, first-media URI, absolute duration/position</td><td>Mostly absent</td><td>Needed by wrappers and reporting paths.</td><td>Medium</td></tr>
+<tr><td>Track / bandwidth integration</td><td>Cache-based track selector + debug bandwidth listener</td><td>Default track selector only</td><td>Requires the Phase 4 rewrite, not a local player tweak.</td><td>High</td></tr>
+</table>
+<div class="act"><strong>Practical rule:</strong> if a method on <code>MediaPlayerInterface</code> is currently a no-op on Media3 but actively used by wrappers or consumers, the migration task belongs to <strong>architecture/parity work</strong>, not simple player substitution.</div>
+</div></div>
+</div>
+
+<!-- ============ COMPONENTS TAB ============ -->
+<div class="tab-panel" id="tab-components">
+<div class="filters">
+<input type="text" id="compSearch" placeholder="Search components..." oninput="filterComps()">
+<select id="compPhase" onchange="filterComps()"><option value="">All Phases</option><option value="0">P0 Foundation</option><option value="1">P1 Player</option><option value="2">P2 DataSources</option><option value="3">P3 Renderers</option><option value="4">P4 ABR</option><option value="5">P5 dav1d</option><option value="6">P6 Consumers</option><option value="7">P7 Cleanup</option></select>
+<select id="compRisk" onchange="filterComps()"><option value="">All Risk</option><option value="done">Done</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select>
+<select id="compLayer" onchange="filterComps()"><option value="">All Layers</option><option value="1">L1 Cache/Pool</option><option value="2">L2 Renderers</option><option value="3">L3 Player</option><option value="4">L4 Factory</option><option value="5">L5 Consumers</option></select>
+</div>
+
+<!-- P0: Foundation -->
+<div class="comp" data-phase="0" data-risk="done" data-layer="0" data-search="maven dependencies media3 exoplayer versions">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Maven Dependencies</span><span class="badge b-done">DONE</span><span class="badge b-phase">P0</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">dependencies/maven_dependencies.yaml</span></div>
+<div class="sec"><h4>Validated Versions</h4>
+<table><tr><th>Artifact Group</th><th>Version</th><th>Count</th></tr>
+<tr><td><code>com.google.android.exoplayer</code></td><td><strong>2.16.1.37</strong></td><td>13 artifacts</td></tr>
+<tr><td><code>com.google.android.exoplayer.v2_16</code> (shadowed)</td><td><strong>2.16.1.37</strong></td><td>13 artifacts</td></tr>
+<tr><td><code>androidx.media3</code></td><td><strong>1.5.1</strong></td><td>10 artifacts</td></tr>
+</table></div>
+<div class="sec"><h4>Media3 Artifacts Declared</h4>
+<div class="codeblk">media3-common, media3-exoplayer, media3-exoplayer-dash,
+media3-exoplayer-hls, media3-datasource, media3-extractor,
+media3-decoder, media3-database, media3-ui, media3-test-utils</div></div>
+<div class="frk"><strong>Note:</strong> Version is <code>1.5.1</code> not <code>1.0.2</code>. <code>TrackGroupArray</code> was removed in 1.5 — must verify <code>CacheBasedTrackSelector</code> compilation.</div>
+</div></div></div>
+
+<div class="comp" data-phase="0" data-risk="done" data-layer="4" data-search="useMedia3Player feature flag PlaybackCofConfigKey PlaybackConfiguration PlaybackCofSnapshot">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Feature Flag: useMedia3Player</span><span class="badge b-done">DONE</span><span class="badge b-phase">P0</span></div>
+<div class="card-b">
+<div class="sec"><h4>Config Chain (Validated)</h4>
+<div class="codeblk">PlaybackCofConfigKey.PLAYBACK_USE_MEDIA3_PLAYER        // COF key: "playback_android_use_media3_player"
+  → PlaybackCofSnapshot.toPlaybackConfiguration()         // evalBool() at line 121
+    → PlaybackConfiguration.useMedia3Player: Boolean       // default: false (line 125)
+      → PlaybackConfigurationKey.PLAYBACK_USE_MEDIA3_PLAYER // @Tweak(requireRestart=true)
+        → MediaPlayerFactoryImpl.createMediaPlayer()       // routing at line 77</div></div>
+<div class="sec"><h4>Files</h4>
+<span class="fp">playback/config/core/PlaybackCofConfigKey.kt</span> line 140<br>
+<span class="fp">playback/config/core/PlaybackCofSnapshot.kt</span> lines 121, 142<br>
+<span class="fp">playback/config/api/PlaybackConfiguration.kt</span> lines 125-126<br>
+<span class="fp">playback/config/core/PlaybackConfigurationKey.kt</span> lines 62-66</div>
+<div class="act">Default <code>false</code>. Tweak-enabled with <code>requireRestart = true</code>. Safe for gradual rollout.</div>
+</div></div></div>
+
+<!-- P1: Player -->
+<div class="comp" data-phase="1" data-risk="done" data-layer="3" data-search="Media3MediaPlayer MediaPlayerInterface ExoPlayer Player.Listener">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Media3MediaPlayer</span><span class="badge b-done">DONE</span><span class="badge b-phase">P1</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/media3/Media3MediaPlayer.kt</span> — 343 lines</div>
+<div class="sec"><h4>Class</h4><span class="cls">Media3MediaPlayer</span> implements <span class="cls">MediaPlayerInterface</span></div>
+<div class="sec"><h4>Constructor (validated)</h4>
+<div class="codeblk">class Media3MediaPlayer(
+    private val context: Context,
+    private var drawingSurface: View?,
+    private val playbackConfiguration: PlaybackConfiguration?,
+    private val looper: Looper = Util.getCurrentOrMainLooper(),
+    override var isRecyclable: Boolean = false,
+) : MediaPlayerInterface</div></div>
+<div class="sec"><h4>Media3 APIs Used (20 imports)</h4>
+<div class="codeblk">androidx.media3.common: AudioAttributes, C, MediaItem, PlaybackException,
+  PlaybackParameters, Player, VideoSize, Util
+androidx.media3.datasource: DataSource, DefaultDataSource
+androidx.media3.exoplayer: ExoPlayer, DefaultLoadControl, LoadControl,
+  DefaultTrackSelector, DefaultAllocator
+  dash.DashMediaSource, hls.HlsMediaSource
+  source.ConcatenatingMediaSource2, MediaSource, ProgressiveMediaSource</div></div>
+<div class="sec"><h4>Key Methods (validated)</h4>
+<table><tr><th>Method</th><th>Line</th><th>Implementation</th></tr>
+<tr><td><code>createPlayer()</code></td><td>91</td><td>ExoPlayer.Builder with TrackSelector, LoadControl, AudioAttributes</td></tr>
+<tr><td><code>createLoadControl()</code></td><td>107</td><td>DefaultLoadControl.Builder with buffering config from PlaybackConfiguration</td></tr>
+<tr><td><code>createMediaSource()</code></td><td>219</td><td>Routes DASH/HLS/Progressive via extension sniffing + StreamingProtocol</td></tr>
+<tr><td><code>prepareAsync()</code></td><td>131</td><td>ConcatenatingMediaSource2 for multi-media, setMediaSource + prepare</td></tr>
+<tr><td><code>release()</code></td><td>159</td><td>removeListener + release + onPlayerReleased callback</td></tr>
+</table></div>
+<div class="sec"><h4>Listener Events (validated)</h4>
+<div class="codeblk">Media3PlayerListener : Player.Listener
+  onPlaybackStateChanged → STATE_READY/ENDED/BUFFERING mapped to MediaPlayerListener
+  onIsPlayingChanged → onStartPlaying
+  onVideoSizeChanged → onMediaSizeChanged
+  onPlayerError → media3ErrorToPlaybackErrorInfo
+  onRenderedFirstFrame → onMediaFirstFrameRendered + onMediaDisplayed
+  onPositionDiscontinuity → DISCONTINUITY_REASON_SEEK → onSeekProcessed</div></div>
+<div class="sec"><h4>Known Limitations (Phase 1 — intentional)</h4>
+<ul>
+<li>Uses <code>DefaultDataSource</code> — no Snap network stack, no caching</li>
+<li>File extension sniffing — no <code>StreamingMediaSourceUtil</code></li>
+<li>No analytics (TTFF/rebuffer), no custom renderers, no codec pooling</li>
+<li>No <code>StubAudioManager</code> (ANR risk on some devices)</li>
+</ul></div>
+</div></div></div>
+
+<div class="comp" data-phase="1" data-risk="done" data-layer="4" data-search="MediaPlayerFactoryImpl createMediaPlayer routing">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">MediaPlayerFactoryImpl (Routing)</span><span class="badge b-done">DONE</span><span class="badge b-phase">P1</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/player/MediaPlayerFactoryImpl.kt</span></div>
+<div class="sec"><h4>Routing Logic (line 71-82, validated)</h4>
+<div class="codeblk">override fun createMediaPlayer(playbackRequest: PlaybackRequest): MediaPlayerInterface {
+    if (playbackRequest.playerType == RequestPlayerType.IMAGE) {
+        return createImagePlayer(playbackRequest)
+    }
+    if (playbackRequest.playbackConfiguration.useMedia3Player) {
+        return Media3MediaPlayer(
+            context = mediaEnginePlayerDependencies.context,
+            drawingSurface = playbackRequest.drawingView,
+            playbackConfiguration = playbackRequest.playbackConfiguration,
+        )
+    }
+    // ... legacy ExoPlayer path via createTimelinePlayer → UnifiedMediaPlayer
+}</div></div>
+<div class="sec"><h4>Tests (3 cases, validated)</h4>
+<table><tr><th>Test</th><th>Assertion</th></tr>
+<tr><td><code>useMedia3Player_false_returnsUnifiedMediaPlayer</code></td><td><code>player is UnifiedMediaPlayer</code></td></tr>
+<tr><td><code>useMedia3Player_true_returnsMedia3MediaPlayer</code></td><td><code>player is Media3MediaPlayer</code></td></tr>
+<tr><td><code>defaultConfig_useMedia3Player_isFalse</code></td><td><code>!PlaybackConfiguration.DEFAULT.useMedia3Player</code></td></tr>
+</table></div>
+</div></div></div>
+
+<!-- P2: Data Sources -->
+<div class="comp" data-phase="2" data-risk="high" data-layer="2" data-search="NetworkManagerDataSource BaseDataSource DataSpec transferInitializing HttpDataSource">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">NetworkManagerDataSource</span><span class="badge b-high">HIGH</span><span class="badge b-phase">P2</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/NetworkManagerDataSource.kt</span> — 296 lines</div>
+<div class="sec"><h4>Class</h4><span class="cls">NetworkManagerDataSource</span> extends <span class="cls">BaseDataSource(true)</span></div>
+<div class="sec"><h4>Constructor (7 params)</h4>
+<div class="codeblk">NetworkManagerDataSource(
+    networkManager: Provider&lt;NetworkManager&lt;NetworkRequest&gt;&gt;,
+    networkRequest: NetworkRequest,
+    noNetworkDetector: Provider&lt;CompositeNoNetworkDetector&gt;,
+    cancellationSignal: CancellationSignal,
+    dataSourceTracker: DataSourceTracker,
+    timeoutMillis: Long,
+    chunkSizeLimit: Long
+)</div></div>
+<div class="sec"><h4>ExoPlayer APIs (validated)</h4>
+<table><tr><th>API</th><th>Package</th><th>Migration</th></tr>
+<tr><td><code>BaseDataSource(true)</code></td><td><code>upstream</code></td><td><code>androidx.media3.datasource.BaseDataSource</code></td></tr>
+<tr><td><code>DataSpec</code> (.position, .length, .key, .uri)</td><td><code>upstream</code></td><td><code>androidx.media3.datasource.DataSpec</code></td></tr>
+<tr><td><code>DataSource.Factory</code></td><td><code>upstream</code></td><td><code>androidx.media3.datasource.DataSource.Factory</code></td></tr>
+<tr><td><code>HttpDataSource.InvalidResponseCodeException</code></td><td><code>upstream</code></td><td><code>androidx.media3.datasource.HttpDataSource</code></td></tr>
+<tr><td><code>C.RESULT_END_OF_INPUT</code></td><td>root</td><td><code>androidx.media3.common.C</code></td></tr>
+<tr><td><code>transferInitializing/Started/Ended</code></td><td>inherited</td><td>Same signatures in Media3</td></tr>
+</table></div>
+<div class="act"><strong>Action:</strong> Create <code>Media3NetworkManagerDataSource</code>. Pure package rename — all APIs confirmed stable in Media3. Inner <code>Factory</code> class also needs rename. RxJava3 integration (<code>Single&lt;Result&lt;Payload&gt;&gt;</code>) unchanged.</div>
+</div></div></div>
+
+<div class="comp" data-phase="2" data-risk="medium" data-layer="2" data-search="EncryptedDataSource encryption cipher BaseDataSource">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">EncryptedDataSource</span><span class="badge b-med">MEDIUM</span><span class="badge b-phase">P2</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/EncryptedDataSource.kt</span> — 148 lines</div>
+<div class="sec"><h4>Class</h4><span class="cls">EncryptedDataSource(encryptedDataStream)</span> extends <span class="cls">BaseDataSource(false)</span></div>
+<div class="sec"><h4>ExoPlayer APIs</h4><code>BaseDataSource</code>, <code>DataSpec</code>, <code>DataSource.Factory</code>, <code>C.RESULT_END_OF_INPUT</code>, <code>C.LENGTH_UNSET</code></div>
+<div class="act">Package rename only. Self-contained encryption wrapping InputStream.</div>
+</div></div></div>
+
+<div class="comp" data-phase="2" data-risk="medium" data-layer="2" data-search="PrefetchAwareDataSource FileDataSource prefetch">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">PrefetchAwareDataSource</span><span class="badge b-med">MEDIUM</span><span class="badge b-phase">P2</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/PrefetchAwareDataSource.kt</span> — 189 lines</div>
+<div class="sec"><h4>Class</h4>Implements <span class="cls">DataSource</span> directly (not BaseDataSource)</div>
+<div class="sec"><h4>ExoPlayer APIs</h4><code>DataSource</code>, <code>DataSpec</code>, <code>FileDataSource</code>, <code>TransferListener</code></div>
+<div class="act">Package rename. Routes between prefetch file and upstream network source.</div>
+</div></div></div>
+
+<div class="comp" data-phase="2" data-risk="medium" data-layer="2" data-search="NativeContentManagerDataSource NativeContentManager streaming">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">NativeContentManagerDataSource</span><span class="badge b-med">MEDIUM</span><span class="badge b-phase">P2</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/streaming/NativeContentManagerDataSource.kt</span> — 436 lines (largest DataSource)</div>
+<div class="sec"><h4>Class</h4><span class="cls">NativeContentManagerDataSource</span> extends <span class="cls">BaseDataSource(true)</span></div>
+<div class="sec"><h4>Constructor (7 params)</h4><code>nativeContentManagerApiProvider</code>, <code>streamingRequestInfo</code>, <code>connectTimeoutMs</code>, <code>readTimeoutMs</code>, <code>mediaPlayerBufferingConfig</code>, <code>streamingWriteStreamInputStream</code>, <code>playerSubject: BehaviorSubject</code></div>
+<div class="sec"><h4>ExoPlayer APIs</h4><code>BaseDataSource</code>, <code>DataSpec</code>, <code>C.RESULT_END_OF_INPUT</code> + transfer lifecycle methods</div>
+<div class="act">Package rename. Complex but uses only stable public API surface. RxJava3 integration (BehaviorSubject, CompositeDisposable) unchanged.</div>
+</div></div></div>
+
+<div class="comp" data-phase="2" data-risk="medium" data-layer="2" data-search="SnapContentResolverAwareDataSource SnapContentResolver">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">SnapContentResolverAwareDataSource</span><span class="badge b-med">MEDIUM</span><span class="badge b-phase">P2</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/streaming/SnapContentResolverAwareDataSource.kt</span> — 208 lines</div>
+<div class="sec"><h4>Class</h4><span class="cls">SnapContentResolverAwareDataSource</span> extends <span class="cls">BaseDataSource(false)</span></div>
+<div class="act">Package rename. Uses <code>BaseDataSource</code>, <code>DataSpec</code>, <code>C.RESULT_END_OF_INPUT</code>.</div>
+</div></div></div>
+
+<div class="comp" data-phase="2" data-risk="medium" data-layer="1" data-search="ExoCacheProvider SimpleCache LeastRecentlyUsedCacheEvictor DatabaseProvider">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">ExoCacheProvider</span><span class="badge b-med">MEDIUM</span><span class="badge b-phase">P2</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/cache/ExoCacheProvider.kt</span> — 99 lines</div>
+<div class="sec"><h4>Constructor Call (validated, line 62)</h4>
+<div class="codeblk">val simpleCache = TraceSimpleCache(SimpleCache(simpleCacheDir, cacheEvictor))
+// 2-arg constructor: SimpleCache(File, CacheEvictor)</div></div>
+<div class="brk"><strong>Breaking Change (Media3 1.5.1):</strong> 2-arg <code>SimpleCache(File, CacheEvictor)</code> constructor <strong>REMOVED</strong>. Must use 3-arg: <code>SimpleCache(File, CacheEvictor, DatabaseProvider)</code>. Add <code>StandaloneDatabaseProvider(context)</code>.</div>
+<div class="sec"><h4>Supporting Classes</h4>
+<span class="fp">playback/core/cache/LazyCache.kt</span> — 79 lines, implements <code>Cache</code> with lazy init<br>
+<span class="fp">playback/core/cache/TraceSimpleCache.kt</span> — 87 lines, wraps <code>SimpleCache</code> with tracing</div>
+</div></div></div>
+
+<div class="comp" data-phase="2" data-risk="medium" data-layer="2" data-search="StreamingMediaSourceUtil DashMediaSource HlsMediaSource ProgressiveMediaSource">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">StreamingMediaSourceUtil</span><span class="badge b-med">MEDIUM</span><span class="badge b-phase">P2</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/streaming/StreamingMediaSourceUtil.kt</span> — 119 lines</div>
+<div class="sec"><h4>Protocol Routing (validated)</h4>
+<table><tr><th>Protocol</th><th>Factory</th><th>Extra Config</th></tr>
+<tr><td>HLS</td><td><code>HlsMediaSource.Factory</code></td><td>LoadErrorHandlingPolicy, chunkless preparation</td></tr>
+<tr><td>DASH</td><td><code>DashMediaSource.Factory</code></td><td>ScDashChunkSource.Factory, manifest parser, error policy</td></tr>
+<tr><td>Progressive</td><td><code>ProgressiveMediaSource.Factory</code></td><td>ExtractorFactory, error policy, continueLoadingBytes</td></tr>
+</table></div>
+<div class="act">Package rename + update factory class refs. Optional encryption wrapping via <code>EncryptedDataSource.Factory</code>.</div>
+</div></div></div>
+
+<!-- P3: Renderers & Codec -->
+<div class="comp" data-phase="3" data-risk="low" data-layer="2" data-search="DefaultSnapRenderersFactory DefaultRenderersFactory buildAudioSink buildVideoRenderers buildAudioRenderers VolumeNormalizationProcessor">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">DefaultSnapRenderersFactory</span><span class="badge b-low">LOW</span><span class="badge b-phase">P3</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/renderer/factory/DefaultSnapRenderersFactory.kt</span> — 183 lines</div>
+<div class="sec"><h4>Class</h4><span class="cls">DefaultSnapRenderersFactory</span> extends <span class="cls">DefaultRenderersFactory</span>, implements <span class="cls">SnapRenderersFactory</span></div>
+<div class="sec"><h4>Overridden Methods (validated)</h4>
+<table><tr><th>Method</th><th>Key Logic</th></tr>
+<tr><td><code>createRenderers()</code></td><td>Creates full renderer array (video, audio, text, metadata, image)</td></tr>
+<tr><td><code>buildVideoRenderers()</code></td><td>Creates <code>SnapMediaCodecVideoRenderer</code> with custom codec adapter (line 98-110)</td></tr>
+<tr><td><code>buildAudioRenderers()</code></td><td>Creates <code>SnapMediaCodecAudioRenderer</code> with custom codec adapter (line 123-134)</td></tr>
+<tr><td><code>buildAudioSink()</code></td><td>Returns <code>DefaultAudioSink</code> with <code>VolumeNormalizationProcessor</code> if enabled (line 144-146)</td></tr>
+</table></div>
+<div class="act"><code>buildAudioSink(Context, boolean, boolean, boolean)</code> <strong>exists</strong> in Media3 1.5.1 as protected method. Package rename + <code>DefaultAudioSink.Builder</code> pattern.</div>
+</div></div></div>
+
+<div class="comp" data-phase="3" data-risk="low" data-layer="2" data-search="SnapMediaCodecVideoRenderer MediaCodecVideoRenderer CodecMaxValues getMediaFormat codecNeedsSetOutputSurfaceWorkaround">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">SnapMediaCodecVideoRenderer</span><span class="badge b-low">LOW</span><span class="badge b-phase">P3</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/renderer/SnapMediaCodecVideoRenderer.kt</span> — 138 lines</div>
+<div class="sec"><h4>Overrides (validated)</h4>
+<ul>
+<li><code>codecNeedsSetOutputSurfaceWorkaround(name)</code> → returns <code>true</code> always (STORIES-1200)</li>
+<li><code>getMediaFormat(format, codecMimeType, codecMaxValues, codecOperatingRate, ...)</code> → removes KEY_MAX_INPUT_SIZE on SDK ≤ M (ME-6887)</li>
+</ul></div>
+<div class="act"><code>CodecMaxValues</code> confirmed unchanged (width, height, inputSize). <code>getMediaFormat()</code> signature identical. Package rename only.</div>
+</div></div></div>
+
+<div class="comp" data-phase="3" data-risk="low" data-layer="2" data-search="SnapMediaCodecAudioRenderer MediaCodecAudioRenderer getMediaFormat operating rate PCM">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">SnapMediaCodecAudioRenderer</span><span class="badge b-low">LOW</span><span class="badge b-phase">P3</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/renderer/SnapMediaCodecAudioRenderer.kt</span> — 88 lines</div>
+<div class="act">Same KEY_MAX_INPUT_SIZE removal + ZTE workaround + PCM_FLOAT handling. Package rename.</div>
+</div></div></div>
+
+<div class="comp" data-phase="3" data-risk="critical" data-layer="2" data-search="AsyncMediaCodecAdaptorFactory AsynchronousMediaCodecAdapter callbackThreadSupplier queueingThreadSupplier enableImmediateCodecStartAfterFlush fork">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">AsyncMediaCodecAdaptorFactory ⚠ FORK</span><span class="badge b-crit">CRITICAL</span><span class="badge b-phase">P3</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/codecs/factory/AsyncMediaCodecAdaptorFactory.kt</span> — 165 lines</div>
+<div class="sec"><h4>Class</h4><span class="cls">AsyncMediaCodecAdaptorFactory</span> extends <span class="cls">AsynchronousMediaCodecAdapter.Factory</span></div>
+<div class="sec"><h4>Fork Dependencies (5, validated at exact lines)</h4>
+<table><tr><th>What Snap Does</th><th>Upstream Media3</th><th>Snap Fork</th><th>Line</th></tr>
+<tr><td>Extends <code>Factory</code></td><td style="color:var(--r)"><code>public static final class</code></td><td style="color:var(--g)">Removed <code>final</code></td><td>38-42</td></tr>
+<tr><td>Reads <code>callbackThreadSupplier.get()</code></td><td style="color:var(--r)"><code>private</code> field</td><td style="color:var(--g)">Made accessible</td><td>124</td></tr>
+<tr><td>Reads <code>queueingThreadSupplier.get()</code></td><td style="color:var(--r)"><code>private</code> field</td><td style="color:var(--g)">Made accessible</td><td>125</td></tr>
+<tr><td>Creates <code>AsynchronousMediaCodecAdapter</code> subclass</td><td style="color:var(--r)"><code>package-private final</code></td><td style="color:var(--g)">Opened + removed final</td><td>122-128</td></tr>
+<tr><td>Uses <code>enableImmediateCodecStartAfterFlush</code></td><td style="color:var(--r)">Doesn't exist</td><td style="color:var(--g)">Added as constructor param</td><td>41</td></tr>
+</table></div>
+<div class="sec"><h4>Override: releaseCodec() (line 130-143)</h4>
+<div class="codeblk">// Returns codec to pool on background thread instead of releasing
+override fun releaseCodec() {
+    codecLeasingEngine.releaseToPool(codecPool, caller, codec, format, codecCacheType)
+}</div></div>
+<div class="brk"><strong>REQUIRES REWRITE.</strong> Cannot extend <code>AsynchronousMediaCodecAdapter.Factory</code> in upstream Media3.</div>
+<div class="act"><strong>Recommended:</strong> Implement <code>MediaCodecAdapter.Factory</code> directly. Use <code>MediaCodec.setCallback()</code> + <code>HandlerThread</code> for async. Core codec pool logic uses <code>android.media.MediaCodec</code> — no ExoPlayer types. ~200 lines new code.</div>
+</div></div></div>
+
+<div class="comp" data-phase="3" data-risk="low" data-layer="2" data-search="SnapMediaCodecAdapterFactory MediaCodecAdapter.Factory CodecPool pre-configured codec">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">SnapMediaCodecAdapterFactory</span><span class="badge b-low">LOW</span><span class="badge b-phase">P3</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/codecs/factory/SnapMediaCodecAdapterFactory.kt</span> — 150 lines</div>
+<div class="sec"><h4>Implements</h4><span class="cls">MediaCodecAdapter.Factory</span> (stable public API)</div>
+<div class="sec"><h4>Routing (3 paths, validated)</h4>
+<ol><li><strong>Pre-configured:</strong> <code>usePreConfiguredCodec && SDK ≥ M</code> → <code>tryCreateFromConfiguredCodec()</code></li>
+<li><strong>Async:</strong> <code>SDK ≥ S</code> (default) or <code>SDK ≥ M</code> (forced) → <code>AsyncMediaCodecAdaptorFactory</code></li>
+<li><strong>Sync:</strong> Default → <code>SyncMediaCodecAdaptorFactory</code></li></ol></div>
+<div class="act">Package rename. Already implements public API interface. Depends on async/sync factories being ported first.</div>
+</div></div></div>
+
+<div class="comp" data-phase="3" data-risk="low" data-layer="2" data-search="SyncMediaCodecAdaptorFactory SynchronousMediaCodecAdapter codec pool setOutputSurface">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">SyncMediaCodecAdaptorFactory</span><span class="badge b-low">LOW</span><span class="badge b-phase">P3</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/codecs/factory/SyncMediaCodecAdaptorFactory.kt</span> — 236 lines</div>
+<div class="sec"><h4>Extends</h4><span class="cls">SynchronousMediaCodecAdapter.Factory</span></div>
+<div class="sec"><h4>Codec State Routing (validated)</h4>
+<ul><li><strong>DISABLED:</strong> Direct <code>MediaCodec.createByCodecName()</code> + configure/start</li>
+<li><strong>CREATED_CODEC:</strong> Pool get → miss → create new</li>
+<li><strong>CONFIGURED_CODEC:</strong> Pool with <code>setOutputSurface()</code> for video (SDK ≥ M)</li></ul></div>
+<div class="act">Package rename. <code>SynchronousMediaCodecAdapter.Factory</code> exists in Media3. No fork dependencies.</div>
+</div></div></div>
+
+<div class="comp" data-phase="3" data-risk="low" data-layer="2" data-search="ScBaseRenderer ScVideoRenderer ScAudioRenderer BaseRenderer MediaClock VideoComponent AudioComponent">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">ScBaseRenderer + ScVideoRenderer + ScAudioRenderer</span><span class="badge b-low">LOW</span><span class="badge b-phase">P3</span></div>
+<div class="card-b">
+<div class="sec"><h4>Files</h4>
+<span class="fp">playback/core/renderer/ScBaseRenderer.kt</span> — 259 lines, extends <span class="cls">BaseRenderer(trackType)</span><br>
+<span class="fp">playback/core/renderer/ScVideoRenderer.kt</span> — 482 lines, extends ScBaseRenderer + <span class="cls">MediaClock</span><br>
+<span class="fp">playback/core/renderer/ScAudioRenderer.kt</span> — 534 lines, extends ScBaseRenderer + <span class="cls">MediaClock</span> + <span class="cls">ClockRenderer.Clock</span></div>
+<div class="sec"><h4>ExoPlayer APIs</h4><code>BaseRenderer</code>, <code>Format</code>, <code>DecoderInputBuffer</code>, <code>SampleStream</code>, <code>MediaClock</code>, <code>C</code> constants</div>
+<div class="act">Uses Snap's custom VideoComponent/AudioComponent pipeline (NOT MediaCodecVideoRenderer). All APIs at stable public level. Package rename only.</div>
+</div></div></div>
+
+<div class="comp" data-phase="3" data-risk="high" data-layer="2" data-search="ScImageRenderer Renderer ExoPlaybackException FormatHolder 1086 lines">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">ScImageRenderer</span><span class="badge b-high">HIGH</span><span class="badge b-phase">P3</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/renderer/ScImageRenderer.kt</span> — <strong>1086 lines</strong> (largest renderer)</div>
+<div class="sec"><h4>Implements</h4><span class="cls">Renderer</span> (raw interface — large surface area), <span class="cls">FormatHolder.Provider</span>, <span class="cls">ContentFrame.Provider</span></div>
+<div class="sec"><h4>ExoPlayer APIs (12 imports)</h4><code>Renderer</code>, <code>RendererCapabilities</code>, <code>ExoPlaybackException</code>, <code>PlaybackException</code>, <code>Format</code>, <code>FormatHolder</code>, <code>DecoderInputBuffer</code>, <code>SampleStream</code>, <code>MediaClock</code>, <code>VideoSize</code>, <code>PlaybackParameters</code>, <code>C</code></div>
+<div class="brk"><code>ExoPlaybackException.createForRenderer()</code> API changed in Media3. Verify constructor.</div>
+<div class="act">Package rename + update ExoPlaybackException creation. Large file but mostly bitmap/OpenGL logic — ExoPlayer surface is at the edges.</div>
+</div></div></div>
+
+<div class="comp" data-phase="3" data-risk="low" data-layer="2" data-search="VolumeNormalizationProcessor AudioProcessor RMS loudness gain ramping">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">VolumeNormalizationProcessor</span><span class="badge b-low">LOW</span><span class="badge b-phase">P3</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/audioprocessor/VolumeNormalizationProcessor.kt</span> — 155 lines</div>
+<div class="sec"><h4>Implements</h4><span class="cls">AudioProcessor</span> — single import from ExoPlayer</div>
+<div class="sec"><h4>Algorithm</h4>RMS loudness → dB → gain calculation (target -23dB) → clamped [0.3, 3.0] → 128-sample ramp</div>
+<div class="act">Package rename only. <code>AudioProcessor</code> interface stable. Self-contained, zero ExoPlayer internal deps.</div>
+</div></div></div>
+
+<!-- P4: ABR -->
+<div class="comp" data-phase="4" data-risk="high" data-layer="2" data-search="CacheBasedAdaptiveTrackSelection AdaptiveTrackSelection updateSelectedIndex selectedIndex fork">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">CacheBasedAdaptiveTrackSelection ⚠ FORK</span><span class="badge b-high">HIGH</span><span class="badge b-phase">P4</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/trackselection/CacheBasedAdaptiveTrackSelection.kt</span> — 157 lines</div>
+<div class="sec"><h4>Delegates to</h4><span class="cls">ExoTrackSelection by adaptiveTrackSelection</span></div>
+<div class="sec"><h4>Fork-Dependent Lines (validated)</h4>
+<div class="codeblk">// Line 47: Gets private field via fork-added getter
+val selectedIndex = adaptiveTrackSelection.selectedIndex
+
+// Line 77: First chunk — force cached quality
+adaptiveTrackSelection.updateSelectedIndex(cachedIndex, C.SELECTION_REASON_CUSTOM_BASE)
+
+// Line 96: Following chunks — switch if cached quality > current
+adaptiveTrackSelection.updateSelectedIndex(cachedIndex, C.SELECTION_REASON_CUSTOM_BASE)</div></div>
+<div class="frk"><code>updateSelectedIndex(int, int)</code> does NOT exist in upstream ExoPlayer or Media3. <code>selectedIndex</code> is <strong>private</strong> in both.</div>
+<div class="act"><strong>Option A:</strong> Reflection wrapper for <code>selectedIndex</code> (~10 lines).<br><strong>Option B (recommended):</strong> Fully override <code>updateSelectedTrack()</code> to own selection logic instead of mutating delegate's private state (~100 lines, cleaner).</div>
+</div></div></div>
+
+<div class="comp" data-phase="4" data-risk="high" data-layer="2" data-search="CacheBasedTrackSelector TrackSelector TrackGroupArray DefaultTrackSelector selectTracks">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">CacheBasedTrackSelector</span><span class="badge b-high">HIGH</span><span class="badge b-phase">P4</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/trackselection/CacheBasedTrackSelector.kt</span> — 137 lines</div>
+<div class="sec"><h4>Extends</h4><span class="cls">TrackSelector()</span></div>
+<div class="sec"><h4>ExoPlayer APIs</h4><code>TrackSelector</code>, <code>TrackGroupArray</code>, <code>TrackSelectorResult</code>, <code>DefaultTrackSelector</code>, <code>MappingTrackSelector</code>, <code>Timeline</code>, <code>DashManifest</code></div>
+<div class="brk"><strong>Media3 1.5.1:</strong> <code>TrackGroupArray</code> is <strong>REMOVED</strong>. Must rewrite <code>selectTracks()</code> signature to use <code>TrackGroup</code> / <code>Tracks</code> API.</div>
+<div class="act">If staying on 1.5.1: full rewrite of track selection signature required. If downgrading to 1.0.x: <code>TrackGroupArray</code> exists (deprecated). This is a key decision point.</div>
+</div></div></div>
+
+<div class="comp" data-phase="4" data-risk="low" data-layer="2" data-search="ScDashChunkSource DefaultDashChunkSource representationHolders DashSegmentIndexCache">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">ScDashChunkSource</span><span class="badge b-low">LOW</span><span class="badge b-phase">P4</span></div>
+<div class="card-b">
+<div class="sec"><h4>File</h4><span class="fp">playback/core/source/ScDashChunkSource.kt</span> — 112 lines</div>
+<div class="sec"><h4>Extends</h4><span class="cls">DefaultDashChunkSource</span></div>
+<div class="act"><code>representationHolders</code> confirmed as <code>protected final RepresentationHolder[]</code>. Package rename only.</div>
+</div></div></div>
+
+<div class="comp" data-phase="4" data-risk="low" data-layer="2" data-search="SnapBandwidthMeter DelegatingBandwidthMeter BandwidthMeter BandwidthClassManager">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">SnapBandwidthMeter + DelegatingBandwidthMeter</span><span class="badge b-low">LOW</span><span class="badge b-phase">P4</span></div>
+<div class="card-b">
+<div class="sec"><h4>Files</h4>
+<span class="fp">playback/core/bandwidth/SnapBandwidthMeter.kt</span> — 154 lines<br>
+<span class="fp">playback/shared/bandwidth/DelegatingBandwidthMeter.kt</span> — 134 lines</div>
+<div class="act">Package rename. <code>BandwidthMeter</code>, <code>TransferListener</code> interfaces stable.</div>
+</div></div></div>
+
+<!-- P5: dav1d -->
+<div class="comp" data-phase="5" data-risk="high" data-layer="2" data-search="Dav1dSoftwareDecoderInstaller LibDav1dVideoRenderer Dav1dLibrary Dav1dLibraryLoader ExoPlayerLibraryInfo">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">dav1d AV1 Decoder Stack</span><span class="badge b-high">HIGH</span><span class="badge b-phase">P5</span></div>
+<div class="card-b">
+<div class="sec"><h4>Files (17 total in decoders/)</h4>
+<span class="fp">decoders/core/av1/Dav1dSoftwareDecoderInstaller.kt</span> — 70 lines<br>
+<span class="fp">decoders/core/av1/Dav1dLibraryLoader.kt</span> — 39 lines<br>
+<span class="fp">decoders/core/av1/BaseDav1dLibraryLoader.kt</span></div>
+<div class="sec"><h4>ExoPlayer Extension APIs (custom Snap extension)</h4>
+<div class="codeblk">com.google.android.exoplayer2.ext.dav1d.LibDav1dVideoRenderer  // Custom Snap class
+com.google.android.exoplayer2.ext.dav1d.Dav1dLibrary           // Custom Snap interface
+com.google.android.exoplayer2.ext.dav1d.Dav1dDecoder            // Custom decoder
+com.google.android.exoplayer2.ext.dav1d.Dav1dNativeBuild        // JNI bridge
+com.google.android.exoplayer2.ext.dav1d.Dav1dLibraryLoaderSystem
+com.google.android.exoplayer2.ExoPlayerLibraryInfo              // Module registration
+com.google.android.exoplayer2.util.LibraryLoader                // Native loading</div></div>
+<div class="frk"><strong>No upstream Media3 dav1d extension.</strong> Media3 ships <code>media3-decoder-av1</code> using <strong>libgav1</strong> (Google's decoder). Decision: benchmark dav1d vs libgav1, or port custom extension.</div>
+<div class="act"><strong>If porting:</strong> Create <code>Media3LibDav1dVideoRenderer</code> extending Media3's <code>DecoderVideoRenderer</code>. JNI layer (native dav1d) stays unchanged.</div>
+</div></div></div>
+
+<div class="comp" data-phase="5" data-risk="medium" data-layer="2" data-search="SnapMediaCodecSelector CodecSelectionPolicy Av1CodecSelectionPolicy HevcCodecSelectionPolicy">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Codec Selection Policies</span><span class="badge b-med">MEDIUM</span><span class="badge b-phase">P5</span></div>
+<div class="card-b">
+<div class="sec"><h4>Files</h4>
+<span class="fp">playback/core/codecs/SnapMediaCodecSelector.kt</span> — 57 lines, implements <span class="cls">MediaCodecSelector</span><br>
+<span class="fp">playback/core/codecs/Av1CodecSelectionPolicy.kt</span> — 38 lines<br>
+<span class="fp">playback/core/codecs/HevcCodecSelectionPolicy.kt</span> — 32 lines<br>
+<span class="fp">playback/core/codecs/CodecSelectionPolicy.kt</span> — 64 lines (interface)</div>
+<div class="act">Package rename. Uses <code>MediaCodecSelector</code>, <code>MediaCodecInfo</code> — stable public APIs.</div>
+</div></div></div>
+
+<!-- P6: Consumers -->
+<div class="comp" data-phase="6" data-risk="medium" data-layer="5" data-search="opera CodecPreConfigurePlugin VideoLayer ExoplayerLongformVideoPlayer warmup network cache">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Opera (21 files)</span><span class="badge b-med">MEDIUM</span><span class="badge b-phase">P6</span></div>
+<div class="card-b">
+<div class="sec"><h4>Sub-areas</h4>
+<table><tr><th>Area</th><th>Files</th><th>Key Classes</th><th>API Depth</th></tr>
+<tr><td>Codec Preconfigure</td><td>3</td><td><code>CodecPreConfigurePlugin</code></td><td>Extractor, Format</td></tr>
+<tr><td>Network Caching</td><td>11</td><td>Cache management</td><td>Cache, CacheDataSink, CacheDataSource</td></tr>
+<tr><td>State Capture</td><td>2</td><td>Debug helpers</td><td>Player state</td></tr>
+<tr><td>Bindings + ProGuard</td><td>2</td><td>DI + rules</td><td>Minimal</td></tr>
+<tr><td>Tests</td><td>4</td><td></td><td></td></tr>
+</table></div>
+</div></div></div>
+
+<div class="comp" data-phase="6" data-risk="medium" data-layer="5" data-search="media-engine CodecPoolImpl AudioProcessor extractors parsers transcoding 49 files">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Media-Engine (49 files)</span><span class="badge b-med">MEDIUM</span><span class="badge b-phase">P6</span></div>
+<div class="card-b">
+<div class="sec"><h4>Sub-areas</h4>
+<table><tr><th>Area</th><th>Files</th><th>API Depth</th></tr>
+<tr><td>Codec management</td><td>6</td><td>CodecPool, CodecInstance — uses <code>android.media.MediaCodec</code> (no ExoPlayer)</td></tr>
+<tr><td>Audio processing</td><td>8</td><td>Custom AudioProcessor implementations, resampling</td></tr>
+<tr><td>Extractors/parsers</td><td>15</td><td>Format conversion, track reading — deep Extractor API</td></tr>
+<tr><td>Codec selection</td><td>12</td><td>Custom MediaCodecSelector, rendering helpers</td></tr>
+<tr><td>API module</td><td>6</td><td>Format extensions, event logging</td></tr>
+</table></div>
+<div class="act">Largest consumer outside core playback. Extractors are deepest API users. Codec pool uses <code>android.media.MediaCodec</code> directly — mostly ExoPlayer-free.</div>
+</div></div></div>
+
+<div class="comp" data-phase="6" data-risk="medium" data-layer="5" data-search="lenses ExoPlayerVideoStream ExoPlayerAudioTrack camera filters">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Lenses (10 files)</span><span class="badge b-med">MEDIUM</span><span class="badge b-phase">P6</span></div>
+<div class="card-b">
+<div class="sec"><h4>Key Classes</h4><span class="cls">ExoPlayerAudioTrack</span> (3 files, full renderer stack), <span class="cls">ExoPlayerVideoStream</span> (3 files), FileDescriptor DataSource (1)</div>
+<div class="act">Deep API usage — custom renderers and data sources. Needs per-file audit.</div>
+</div></div></div>
+
+<div class="comp" data-phase="6" data-risk="low" data-layer="5" data-search="cheerios spectacles snap-devices messaging voice notes music">
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Cheerios + Snap-Devices + Messaging + Music (14 files)</span><span class="badge b-low">LOW</span><span class="badge b-phase">P6</span></div>
+<div class="card-b">
+<table><tr><th>Module</th><th>Files</th><th>Key Class</th><th>Depth</th></tr>
+<tr><td>Cheerios</td><td>10</td><td>Video playback for smart glasses</td><td>Low (<code>Player.Listener</code>)</td></tr>
+<tr><td>Snap-Devices</td><td>2</td><td><code>DefaultVideoPlayerView</code></td><td>Medium (<code>DefaultRenderersFactory</code>)</td></tr>
+<tr><td>Messaging</td><td>1</td><td><code>DefaultAudioPlaybackSessionImpl</code></td><td>Deep (extractors, MP4)</td></tr>
+<tr><td>Music</td><td>1</td><td><code>AudioFactory</code></td><td>Low (<code>RawResourceDataSource</code>)</td></tr>
+</table></div></div></div>
+
+</div>
+
+<!-- ============ PHASES TAB ============ -->
+<div class="tab-panel" id="tab-phases">
+<p style="color:var(--td);margin-bottom:16px">Detailed phase breakdown with validated task lists. Click components tab for per-file details.</p>
+
+<div class="card open"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Phase 0: Foundation</span><span class="badge b-done">MOSTLY DONE</span><span class="badge" style="background:rgba(88,166,255,.2);color:var(--a)">1-2 weeks</span></div>
+<div class="card-b">
+<table><tr><th>Task</th><th>Status</th><th>Notes</th></tr>
+<tr><td>Add Media3 Maven deps</td><td style="color:var(--g)">DONE</td><td>10 artifacts at 1.5.1</td></tr>
+<tr><td>Feature flag <code>useMedia3Player</code></td><td style="color:var(--g)">DONE</td><td>COF + Tweak, default false</td></tr>
+<tr><td>ProGuard rules</td><td style="color:var(--g)">DONE</td><td>dontnote rules added</td></tr>
+<tr><td>BUILD.bazel deps</td><td style="color:var(--g)">DONE</td><td>8 deps in playback/core</td></tr>
+<tr><td>Capability model</td><td style="color:var(--y)">TODO</td><td>PlaybackEngineCapabilities interface</td></tr>
+<tr><td>Fork audit</td><td style="color:var(--y)">TODO</td><td>5 patches identified, need formal diff</td></tr>
+</table></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Phase 1: Minimal Player</span><span class="badge b-done">DONE</span><span class="badge" style="background:rgba(88,166,255,.2);color:var(--a)">2-3 weeks</span></div>
+<div class="card-b">
+<table><tr><th>Task</th><th>Status</th><th>Notes</th></tr>
+<tr><td>Media3MediaPlayer (343 lines)</td><td style="color:var(--g)">DONE</td><td>Implements MediaPlayerInterface</td></tr>
+<tr><td>Factory routing</td><td style="color:var(--g)">DONE</td><td>Line 77 in MediaPlayerFactoryImpl</td></tr>
+<tr><td>Unit tests (3 + Media3MediaPlayerTest)</td><td style="color:var(--g)">DONE</td><td>Factory + player lifecycle tests</td></tr>
+<tr><td>Device validation</td><td style="color:var(--y)">TODO</td><td>3+ devices, DASH/HLS/Progressive</td></tr>
+</table></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Phase 2: Data Sources & Streaming</span><span class="badge b-med">MEDIUM</span><span class="badge" style="background:rgba(88,166,255,.2);color:var(--a)">3-4 weeks</span></div>
+<div class="card-b">
+<table><tr><th>Task</th><th>Lines</th><th>Risk</th><th>Action</th></tr>
+<tr><td>NetworkManagerDataSource</td><td>296</td><td style="color:var(--o)">HIGH</td><td>Package rename (critical data path)</td></tr>
+<tr><td>NativeContentManagerDataSource</td><td>436</td><td style="color:var(--y)">MED</td><td>Package rename (complex but stable API)</td></tr>
+<tr><td>SnapContentResolverAwareDataSource</td><td>208</td><td style="color:var(--y)">MED</td><td>Package rename</td></tr>
+<tr><td>PrefetchAwareDataSource</td><td>189</td><td style="color:var(--y)">MED</td><td>Package rename</td></tr>
+<tr><td>EncryptedDataSource</td><td>148</td><td style="color:var(--y)">MED</td><td>Package rename</td></tr>
+<tr><td>StreamingMediaSourceUtil</td><td>119</td><td style="color:var(--y)">MED</td><td>Update factory refs</td></tr>
+<tr><td>ExoCacheProvider</td><td>99</td><td style="color:var(--y)">MED</td><td><strong>SimpleCache 3-arg fix</strong></td></tr>
+<tr><td>SnapDefaultDataSource + Factory</td><td>88</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+<tr><td>DataSourceWrappedInputStream</td><td>130</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+<tr><td>DataSourceTracker</td><td>72</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+<tr><td>Wire into Media3MediaPlayer</td><td>—</td><td style="color:var(--y)">MED</td><td>Replace DefaultDataSource</td></tr>
+</table></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Phase 3: Renderers & Codec Pool</span><span class="badge b-high">HIGH</span><span class="badge" style="background:rgba(88,166,255,.2);color:var(--a)">4-6 weeks</span></div>
+<div class="card-b">
+<table><tr><th>Task</th><th>Lines</th><th>Risk</th><th>Action</th></tr>
+<tr><td><strong>AsyncMediaCodecAdaptorFactory</strong></td><td>165</td><td style="color:var(--r)">CRIT</td><td><strong>REWRITE</strong> — implement MediaCodecAdapter.Factory directly</td></tr>
+<tr><td>ScImageRenderer</td><td>1086</td><td style="color:var(--o)">HIGH</td><td>Package rename + ExoPlaybackException API fix</td></tr>
+<tr><td>ScVideoRenderer</td><td>482</td><td style="color:var(--g)">LOW</td><td>Package rename (uses stable BaseRenderer)</td></tr>
+<tr><td>ScAudioRenderer</td><td>534</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+<tr><td>ScBaseRenderer</td><td>259</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+<tr><td>SyncMediaCodecAdaptorFactory</td><td>236</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+<tr><td>DefaultSnapRenderersFactory</td><td>183</td><td style="color:var(--g)">LOW</td><td>Package rename + DefaultAudioSink.Builder</td></tr>
+<tr><td>VolumeNormalizationProcessor</td><td>155</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+<tr><td>SnapMediaCodecAdapterFactory</td><td>150</td><td style="color:var(--g)">LOW</td><td>Package rename (public API)</td></tr>
+<tr><td>SnapMediaCodecVideoRenderer</td><td>138</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+<tr><td>DelegateLoadControl</td><td>128</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+<tr><td>SnapMediaCodecAudioRenderer</td><td>88</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+<tr><td>FastExtractorFactory</td><td>57</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+</table></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Phase 4: Track Selection & ABR</span><span class="badge b-high">HIGH</span><span class="badge" style="background:rgba(88,166,255,.2);color:var(--a)">3-4 weeks</span></div>
+<div class="card-b">
+<table><tr><th>Task</th><th>Lines</th><th>Risk</th><th>Action</th></tr>
+<tr><td><strong>CacheBasedAdaptiveTrackSelection</strong></td><td>157</td><td style="color:var(--o)">HIGH</td><td>Rewrite updateSelectedTrack() or reflection wrapper</td></tr>
+<tr><td><strong>CacheBasedTrackSelector</strong></td><td>137</td><td style="color:var(--o)">HIGH</td><td>TrackGroupArray removed in 1.5 — needs rewrite</td></tr>
+<tr><td>ScDashChunkSource</td><td>112</td><td style="color:var(--g)">LOW</td><td>Package rename (representationHolders confirmed)</td></tr>
+<tr><td>SnapBandwidthMeter</td><td>154</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+<tr><td>DelegatingBandwidthMeter</td><td>134</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+<tr><td>SnapLoadErrorHandlingPolicy</td><td>45</td><td style="color:var(--g)">LOW</td><td>Package rename</td></tr>
+</table></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Phase 5: dav1d / AV1</span><span class="badge b-high">HIGH</span><span class="badge" style="background:rgba(88,166,255,.2);color:var(--a)">2-3 weeks</span></div>
+<div class="card-b">
+<table><tr><th>Task</th><th>Risk</th><th>Action</th></tr>
+<tr><td>Benchmark dav1d vs libgav1</td><td style="color:var(--o)">HIGH</td><td>Decision: port custom or switch to upstream</td></tr>
+<tr><td>Port/replace decoder stack (17 files)</td><td style="color:var(--o)">HIGH</td><td>If porting: new DecoderVideoRenderer extension for Media3</td></tr>
+<tr><td>Codec selection policies (4 files)</td><td style="color:var(--y)">MED</td><td>Package rename</td></tr>
+</table></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Phase 6: Consumer Modules</span><span class="badge b-med">MEDIUM</span><span class="badge" style="background:rgba(88,166,255,.2);color:var(--a)">2-3 weeks</span></div>
+<div class="card-b">
+<table><tr><th>Module</th><th>Files</th><th>Risk</th></tr>
+<tr><td>Media-Engine</td><td>49</td><td style="color:var(--y)">MED (deep Extractor API)</td></tr>
+<tr><td>Opera</td><td>21</td><td style="color:var(--y)">MED (Cache APIs)</td></tr>
+<tr><td>Decoders</td><td>17</td><td>Handled in P5</td></tr>
+<tr><td>Lenses</td><td>10</td><td style="color:var(--y)">MED (custom renderers)</td></tr>
+<tr><td>Cheerios</td><td>10</td><td style="color:var(--g)">LOW</td></tr>
+<tr><td>Snap-Devices</td><td>2</td><td style="color:var(--y)">MED</td></tr>
+<tr><td>Messaging</td><td>1</td><td style="color:var(--y)">MED</td></tr>
+<tr><td>Music</td><td>1</td><td style="color:var(--g)">LOW</td></tr>
+</table></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Phase 7: Cleanup</span><span class="badge b-low">LOW</span><span class="badge" style="background:rgba(88,166,255,.2);color:var(--a)">3-4 weeks</span></div>
+<div class="card-b">
+<p>Prerequisites: Media3 at 100% rollout for 4+ weeks.</p>
+<table><tr><th>Task</th><th>Scope</th></tr>
+<tr><td>Delete ExoPlayer code path</td><td>ExoMediaPlayer.kt + routing</td></tr>
+<tr><td>Delete ExoV2_16 dead code</td><td><strong>152 files</strong></td></tr>
+<tr><td>Remove ExoPlayer Maven deps</td><td>26 artifacts (13 + 13 shadowed)</td></tr>
+<tr><td>Consolidate Media3 files</td><td>Remove "Media3" prefixes</td></tr>
+<tr><td>Update ProGuard rules</td><td>Remove ExoPlayer-specific rules</td></tr>
+</table></div></div>
+</div>
+
+<!-- ============ API SURFACE TAB ============ -->
+<div class="tab-panel" id="tab-api">
+<p style="color:var(--td);margin-bottom:12px">265 unique ExoPlayer imports + 20 Media3 imports found across the codebase. Categorized by package.</p>
+
+<div class="card open"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Media3 Imports (Already Migrated — 20)</span></div>
+<div class="card-b"><div class="codeblk">androidx.media3.common: AudioAttributes, C, MediaItem, PlaybackException,
+  PlaybackParameters, Player, VideoSize, Util
+androidx.media3.datasource: DataSource, DefaultDataSource
+androidx.media3.exoplayer: ExoPlayer, DefaultLoadControl, LoadControl,
+  DefaultTrackSelector, DefaultAllocator
+  dash.DashMediaSource, hls.HlsMediaSource
+  source: ConcatenatingMediaSource2, MediaSource, ProgressiveMediaSource</div></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Core Player (15 imports)</span></div>
+<div class="card-b"><div class="codeblk">ExoPlayer, SimpleExoPlayer, Player, Player.PlaybackSuppressionReason,
+PlayerMessage, PlaybackException, ExoPlaybackException, PlaybackParameters,
+SeekParameters, Timeline, BaseRenderer, Renderer, RendererCapabilities (8 sub-imports),
+RendererConfiguration, RenderersFactory, NoSampleRenderer, DefaultRenderersFactory,
+DefaultLoadControl, LoadControl, AudioManager</div></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Data Sources (24 imports)</span></div>
+<div class="card-b"><div class="codeblk">DataSource, DataSpec, BaseDataSource, DataSink, DataReader,
+DataSourceInputStream, DefaultDataSource, DefaultDataSourceFactory,
+DefaultHttpDataSource, FileDataSource, FileDataSource.FileDataSourceException,
+ContentDataSource, ByteArrayDataSource, RawResourceDataSource,
+HttpDataSource, HttpDataSource.InvalidResponseCodeException,
+TransferListener, BandwidthMeter, DefaultBandwidthMeter,
+Allocator, DefaultAllocator, LoaderErrorThrower,
+DefaultLoadErrorHandlingPolicy, LoadErrorHandlingPolicy</div></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Cache (12 imports)</span></div>
+<div class="card-b"><div class="codeblk">Cache, CacheSpan, CacheDataSink, CacheDataSource, CacheEvictor,
+SimpleCache, LeastRecentlyUsedCacheEvictor,
+ContentMetadata, ContentMetadata.KEY_CONTENT_LENGTH, ContentMetadata.KEY_CUSTOM_PREFIX,
+ContentMetadataMutations, DefaultContentMetadata</div></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Media Sources (20 imports)</span></div>
+<div class="card-b"><div class="codeblk">MediaSource, MediaSource.MediaPeriodId, MediaSourceFactory, MediaSourceEventListener,
+DefaultMediaSourceFactory, MediaItem, ProgressiveMediaSource,
+DashMediaSource, HlsMediaSource, ConcatenatingMediaSource,
+ClippingMediaSource, MergingMediaSource, SilenceMediaSource, SingleSampleMediaSource,
+SampleStream, TrackGroup, TrackGroupArray, LoadEventInfo, MediaLoadData,
+source.ads.AdPlaybackState</div></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">DASH (14 imports)</span></div>
+<div class="card-b"><div class="codeblk">DashChunkSource, DefaultDashChunkSource, DashSegmentIndex, DashManifest, DashManifestParser,
+PlayerEmsgHandler, BaseUrlExclusionList,
+manifest: AdaptationSet, BaseUrl, Period, RangedUri, Representation, SegmentBase,
+ServiceDescriptionElement, UtcTimingElement
+chunk: BundledChunkExtractor, Chunk, ChunkExtractor, MediaChunk, MediaChunkIterator</div></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Codec Adapters (10 imports)</span></div>
+<div class="card-b"><div class="codeblk">MediaCodecAdapter, MediaCodecAdapter.Configuration, MediaCodecInfo,
+AsynchronousMediaCodecAdapter, SynchronousMediaCodecAdapter,
+DefaultMediaCodecAdapterFactory, MediaCodecSelector, MediaCodecUtil,
+MediaCodecUtil.DecoderQueryException, MediaCodecRenderer</div></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Track Selection (13 imports)</span></div>
+<div class="card-b"><div class="codeblk">TrackSelector, TrackSelectorResult, TrackSelection, TrackSelectionArray,
+AdaptiveTrackSelection, DefaultTrackSelector, DefaultTrackSelector.Parameters,
+ExoTrackSelection, FixedTrackSelection, MappingTrackSelector</div></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Audio (12 imports)</span></div>
+<div class="card-b"><div class="codeblk">AudioProcessor, BaseAudioProcessor, AudioSink, DefaultAudioSink,
+SonicAudioProcessor, AudioCapabilities, AudioAttributes,
+AudioRendererEventListener, MediaCodecAudioRenderer</div></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Video (7 imports)</span></div>
+<div class="card-b"><div class="codeblk">MediaCodecVideoRenderer, VideoRendererEventListener, VideoSize,
+ColorInfo, DummySurface, VideoDecoderOutputBuffer</div></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Extractors (24 imports)</span></div>
+<div class="card-b"><div class="codeblk">Extractor, ExtractorInput, ExtractorOutput, ExtractorsFactory,
+DefaultExtractorInput, DefaultExtractorsFactory, DummyTrackOutput,
+PositionHolder, SeekMap, SeekPoint, TrackOutput,
+Mp4Extractor, FragmentedMp4Extractor, MatroskaExtractor, Mp3Extractor,
+WavExtractor, FlacExtractor, FlvExtractor, OggExtractor, JpegExtractor,
+AmrExtractor, AdtsExtractor, Ac3Extractor, Ac4Extractor,
+PsExtractor, TsExtractor, MkvThrowingSniffer, Mp4ThrowingSniffer, Mp4SubtypeMissmatchException</div></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Extensions (7 imports)</span></div>
+<div class="card-b"><div class="codeblk">ext.dav1d: LibDav1dVideoRenderer, Dav1dLibrary, Dav1dDecoder, Dav1dNativeBuild, Dav1dLibraryLoaderSystem
+ext.av1: Gav1Decoder, Gav1Library
+ExoPlayerLibraryInfo, LibraryLoader</div></div></div>
+
+<div class="card"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Utilities (16 imports)</span></div>
+<div class="card-b"><div class="codeblk">C (+ 6 sub-constants), Format (+ NO_VALUE, toLogString), FormatHolder,
+MimeTypes (+ AUDIO_MPEG), Util, Assertions, Clock, EventLogger,
+FileTypes, MediaClock, StandaloneMediaClock, MediaFormatUtil,
+ParsableByteArray, SnapTracer, TraceUtil,
+text: Cue, TextOutput, metadata: MetadataOutput,
+decoder: DecoderInputBuffer, DecoderReuseEvaluation,
+ui: PlayerView, analytics: AnalyticsCollector, AnalyticsListener,
+testutil: DataSourceContractTest, LoopingMediaSource</div></div></div>
+</div>
+
+<!-- ============ BLOCKERS TAB ============ -->
+<div class="tab-panel" id="tab-blockers">
+<h2 style="margin-bottom:16px">Blockers — 5/5 Resolved</h2>
+
+<div class="card open" style="border-left:3px solid var(--g)"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">B1: AdaptiveTrackSelection.updateSelectedIndex()</span><span class="badge b-done">RESOLVED</span></div>
+<div class="card-b">
+<p><strong>Verdict:</strong> <span style="color:var(--y)">SNAP FORK METHOD</span> — does NOT exist in upstream ExoPlayer 2.16 or Media3.</p>
+<p><code>selectedIndex</code> is <strong>private</strong> in both. Fork added the getter + setter.</p>
+<p><strong>Risk:</strong> CRITICAL → <span style="color:var(--y)">MEDIUM</span>. Known fork addition. Reflection or full override.</p>
+<p><strong>Callers:</strong> <span class="fp">CacheBasedAdaptiveTrackSelection.kt</span> lines 47, 77, 96</p>
+</div></div>
+
+<div class="card" style="border-left:3px solid var(--r)"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">B2: AsynchronousMediaCodecAdapter.Factory — 5 Fork Modifications</span><span class="badge b-crit">REWRITE NEEDED</span></div>
+<div class="card-b">
+<table><tr><th>Fork Change</th><th>Upstream</th><th>Snap Fork</th></tr>
+<tr><td>Removed <code>final</code> from Factory</td><td><code>public static final class</code></td><td>Removed final</td></tr>
+<tr><td>Exposed <code>callbackThreadSupplier</code></td><td>private</td><td>Made accessible</td></tr>
+<tr><td>Exposed <code>queueingThreadSupplier</code></td><td>private</td><td>Made accessible</td></tr>
+<tr><td>Opened <code>AsynchronousMediaCodecAdapter</code></td><td>package-private final</td><td>Opened + unfinal</td></tr>
+<tr><td>Added <code>enableImmediateCodecStartAfterFlush</code></td><td>Doesn't exist</td><td>Added constructor param</td></tr>
+</table>
+<div class="brk"><strong>REQUIRES REWRITE (~200 lines).</strong> Implement <code>MediaCodecAdapter.Factory</code> directly with <code>MediaCodec.setCallback()</code> + HandlerThread.</div>
+</div></div>
+
+<div class="card" style="border-left:3px solid var(--g)"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">B3-B5: buildAudioSink, CodecMaxValues, representationHolders</span><span class="badge b-done">NOT BLOCKERS</span></div>
+<div class="card-b">
+<ul>
+<li><code>buildAudioSink(Context, boolean, boolean, boolean)</code> — <strong>EXISTS</strong> as protected method in Media3</li>
+<li><code>CodecMaxValues</code> — unchanged (width, height, inputSize), <code>getMediaFormat()</code> identical</li>
+<li><code>representationHolders</code> — <code>protected final RepresentationHolder[]</code>, unchanged</li>
+</ul>
+</div></div>
+
+<h2 style="margin:24px 0 16px">Key Decision: Media3 1.0.x vs 1.5.1</h2>
+<div class="card open" style="border-left:3px solid var(--y)"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">TrackGroupArray Removed in 1.5 — Decision Required</span></div>
+<div class="card-b">
+<p>Maven deps declare <strong>1.5.1</strong> but <code>CacheBasedTrackSelector</code> uses <code>TrackGroupArray</code> which was <strong>removed</strong> in Media3 1.5.</p>
+<div class="sec"><h4>Option A: Stay at 1.5.1 (recommended)</h4>
+<ul><li>Rewrite <code>CacheBasedTrackSelector.selectTracks()</code> to use <code>Tracks</code> API (~100 lines)</li>
+<li>Gets all performance benefits (heap-aware buffers, dynamic scheduling, PreloadMediaSource)</li>
+<li>Single migration step instead of two</li></ul></div>
+<div class="sec"><h4>Option B: Downgrade to 1.0.x first</h4>
+<ul><li><code>TrackGroupArray</code> exists (deprecated) — less rewrite</li>
+<li>Two-step: 1.0.x then 1.5.1</li>
+<li>More total work but lower risk per step</li></ul></div>
+</div></div>
+</div>
+
+<!-- ============ METRICS TAB ============ -->
+<div class="tab-panel" id="tab-metrics">
+<h2 style="margin-bottom:16px">Gating Metrics</h2>
+<table><tr><th>Metric</th><th>Source</th><th>Threshold</th></tr>
+<tr><td>Video start time (p50)</td><td>Graphene</td><td>&lt; 5% regression</td></tr>
+<tr><td>Video start time (p95)</td><td>Graphene</td><td>&lt; 10% regression</td></tr>
+<tr><td>Frame drop rate</td><td>Graphene</td><td>&lt; 5% increase</td></tr>
+<tr><td>Playback error rate</td><td>Blizzard</td><td>&lt; 2% increase</td></tr>
+<tr><td>ANR rate (media stack)</td><td>Blizzard</td><td>No increase</td></tr>
+<tr><td>Crash rate (media)</td><td>Crashlytics</td><td>No increase</td></tr>
+<tr><td>Codec pool hit rate</td><td>Custom</td><td>&lt; 2% decrease</td></tr>
+<tr><td>ABR avg bitrate</td><td>Custom</td><td>&lt; 5% decrease</td></tr>
+</table>
+
+<h2 style="margin:24px 0 16px">Per-Phase Gates</h2>
+<table><tr><th>Phase</th><th>Gate</th><th>How</th></tr>
+<tr><td>1</td><td>Basic playback</td><td>Manual: play/pause/seek on 3+ devices</td></tr>
+<tr><td>2</td><td>Custom data sources</td><td>Streaming plays via Snap network stack</td></tr>
+<tr><td>3</td><td>Renderers + codec pool</td><td>Codec pool hit rate within 2%</td></tr>
+<tr><td>4</td><td>ABR</td><td>Avg bitrate within 5%; cache selection works</td></tr>
+<tr><td>5</td><td>dav1d</td><td>AV1 plays; decode rate within 5%</td></tr>
+<tr><td>6</td><td>All consumers</td><td>Full app build, all test scenarios pass</td></tr>
+<tr><td>7</td><td>Cleanup</td><td>No ExoPlayer imports remain</td></tr>
+</table>
+
+<h2 style="margin:24px 0 16px">Key Decisions</h2>
+<table><tr><th>Decision</th><th>Recommendation</th><th>Status</th></tr>
+<tr><td>Media3 1.0 or 1.5.1?</td><td><strong>1.5.1 directly</strong> (already in maven)</td><td style="color:var(--y)">Needs validation</td></tr>
+<tr><td>Fork Media3?</td><td><strong>No — rewrite 2 components</strong></td><td style="color:var(--g)">Decided</td></tr>
+<tr><td>dav1d or libgav1?</td><td><strong>Benchmark first</strong></td><td style="color:var(--y)">Pending</td></tr>
+<tr><td>Delete v2_16 when?</td><td><strong>LAST (Phase 7)</strong></td><td style="color:var(--g)">Decided</td></tr>
+<tr><td>CameraKit scope?</td><td><strong>Out of scope</strong></td><td style="color:var(--g)">Decided</td></tr>
+<tr><td>buildAudioSink()</td><td><strong>Exists in Media3</strong></td><td style="color:var(--g)">Resolved</td></tr>
+<tr><td>CodecMaxValues</td><td><strong>Unchanged</strong></td><td style="color:var(--g)">Resolved</td></tr>
+<tr><td>representationHolders</td><td><strong>Protected, unchanged</strong></td><td style="color:var(--g)">Resolved</td></tr>
+</table>
+</div>
+
+</div><!-- /container -->
+
+<script>
+function showTab(id){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.main-tabs button').forEach(b=>b.classList.remove('active'));
+  const panel=document.getElementById('tab-'+id);
+  if(panel)panel.classList.add('active');
+  const idx=['overview','architecture','components','phases','api','blockers','metrics'].indexOf(id);
+  const btns=document.querySelectorAll('.main-tabs button');
+  if(btns[idx])btns[idx].classList.add('active');
+}
+function tog(h){h.closest('.card').classList.toggle('open')}
+function filterComps(){
+  const q=(document.getElementById('compSearch').value||'').toLowerCase();
+  const ph=document.getElementById('compPhase').value;
+  const rk=document.getElementById('compRisk').value;
+  const ly=document.getElementById('compLayer').value;
+  document.querySelectorAll('.comp').forEach(c=>{
+    let show=true;
+    if(q&&!(c.getAttribute('data-search')||'').toLowerCase().includes(q)&&!c.innerText.toLowerCase().includes(q))show=false;
+    if(ph&&c.getAttribute('data-phase')!==ph)show=false;
+    if(rk&&c.getAttribute('data-risk')!==rk)show=false;
+    if(ly&&c.getAttribute('data-layer')!==ly)show=false;
+    c.style.display=show?'':'none';
+  });
+}
+</script>
+</body>
+</html>
