@@ -81,6 +81,10 @@ tr:hover td{background:rgba(88,166,255,.04)}
 .mini-card{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px}
 .mini-card h4{font-size:.92em;margin-bottom:6px}
 .mini-card p{font-size:.85em;color:var(--td);margin:0}
+.embed-wrap{margin-top:12px;border:1px solid var(--bd);border-radius:10px;overflow:hidden;background:#0d1117}
+.embed-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;background:var(--s2);border-bottom:1px solid var(--bd)}
+.embed-head p{margin:0;color:var(--td);font-size:.85em}
+.embed-frame{width:100%;height:78vh;border:0;background:#0d1117}
 .arch-step{padding:10px 12px;border-radius:8px;margin:6px 0;border:1px solid var(--bd)}
 .arch-step.do-not-swap{background:rgba(248,81,73,.08);border-color:rgba(248,81,73,.3)}
 .arch-step.partial{background:rgba(210,153,34,.08);border-color:rgba(210,153,34,.3)}
@@ -121,6 +125,7 @@ ul{padding-left:18px;margin:4px 0}li{margin:2px 0}p{margin:6px 0}
 <button onclick="showTab('api')">API Surface (265)</button>
 <button onclick="showTab('blockers')">Blockers & Fork</button>
 <button onclick="showTab('metrics')">Metrics</button>
+<button onclick="showTab('interactive-architecture')">Interactive Architecture</button>
 </div>
 
 <!-- ============ OVERVIEW TAB ============ -->
@@ -284,6 +289,21 @@ ul{padding-left:18px;margin:4px 0}li{margin:2px 0}p{margin:6px 0}
 <tr><td>Track / bandwidth integration</td><td>Cache-based track selector + debug bandwidth listener</td><td>Default track selector only</td><td>Requires the Phase 4 rewrite, not a local player tweak.</td><td>High</td></tr>
 </table>
 <div class="act"><strong>Practical rule:</strong> if a method on <code>MediaPlayerInterface</code> is currently a no-op on Media3 but actively used by wrappers or consumers, the migration task belongs to <strong>architecture/parity work</strong>, not simple player substitution.</div>
+</div></div>
+</div>
+
+<!-- ============ INTERACTIVE ARCHITECTURE TAB ============ -->
+<div class="tab-panel" id="tab-interactive-architecture">
+<div class="card open"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Playback-Focused Interactive Architecture</span></div>
+<div class="card-b">
+<p style="color:var(--td)">This embeds the playback-focused companion view directly into this migration page so you can stay in one document while drilling into stack layers, nested dependencies, dead-code risk, and swapability.</p>
+<div class="embed-wrap">
+<div class="embed-head">
+<p>Embedded source: <code>file:///Users/myu/Documents/diagrams/system-architecture-interactive.html</code></p>
+<a href="file:///Users/myu/Documents/diagrams/system-architecture-interactive.html">Open standalone</a>
+</div>
+<iframe class="embed-frame" src="file:///Users/myu/Documents/diagrams/system-architecture-interactive.html" title="Playback focused interactive architecture"></iframe>
+</div>
 </div></div>
 </div>
 
@@ -1021,7 +1041,7 @@ function showTab(id){
   document.querySelectorAll('.main-tabs button').forEach(b=>b.classList.remove('active'));
   const panel=document.getElementById('tab-'+id);
   if(panel)panel.classList.add('active');
-  const idx=['overview','architecture','components','phases','api','blockers','metrics'].indexOf(id);
+  const idx=['overview','architecture','components','phases','api','blockers','metrics','interactive-architecture'].indexOf(id);
   const btns=document.querySelectorAll('.main-tabs button');
   if(btns[idx])btns[idx].classList.add('active');
 }
