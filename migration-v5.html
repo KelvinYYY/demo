@@ -646,9 +646,16 @@ ul{padding-left:18px;margin:4px 0}li{margin:2px 0}p{margin:6px 0}
 <div class="sd-nn">Messaging</div><div class="sd-nd">Audio playback</div>
 <div class="sd-tooltip"><div class="sd-tt-title">DefaultAudioPlaybackSessionImpl</div><div class="sd-tt-body">Single file with player creation. Route through MediaPlayerFactoryImpl.</div><div class="sd-tt-tag" style="background:rgba(248,81,73,.15);color:var(--sd-red)">TODO — Route via factory</div></div>
 </div>
-<div class="sd-node sd-node-shared" style="border-width:2px;border-style:dashed;border-color:rgba(86,212,221,.4)">
-<div class="sd-nn">MediaPlayerInterface</div><div class="sd-nd">A/B boundary contract</div>
-<div class="sd-tooltip"><div class="sd-tt-title">MediaPlayerInterface</div><div class="sd-tt-body">48 methods (14 abstract, 34 defaults). The A/B boundary — all consumers above this are ExoPlayer-agnostic. Both ExoMediaPlayer and Media3MediaPlayer implement this.</div><div class="sd-tt-tag" style="background:rgba(86,212,221,.1);color:var(--sd-cyan)">KEY ABSTRACTION</div></div>
+<div class="sd-node sd-node-shared" style="border-width:2px;border-color:rgba(86,212,221,.6);background:linear-gradient(135deg,rgba(86,212,221,.1),rgba(88,166,255,.06));min-width:280px;padding:10px 16px">
+<div class="sd-nn" style="font-size:.9em">MediaPlayerInterface — THE CONTRACT</div>
+<div class="sd-nd" style="margin-top:4px">48 methods · 14 abstract · 34 defaults<br>
+<span style="color:var(--sd-green)">21 implemented</span> · <span style="color:var(--sd-red)">27 no-op/stub on Media3</span><br>
+<strong style="color:var(--sd-t)">Migration goal: 0 regressions on all 48</strong></div>
+<div class="sd-tooltip" style="width:360px"><div class="sd-tt-title">MediaPlayerInterface — Migration Success Contract</div><div class="sd-tt-body">
+This is the <strong>single definition of "done"</strong>. Both ExoPlayer and Media3 paths must produce identical behavior on every method. Consumers above (Opera, Lenses, Messaging) call these methods — they must not know which engine is underneath.<br><br>
+<strong>Currently working (21):</strong> setSurface, setMedia, prepareAsync, start, stop, release, pause, seekTo, setPlaybackRate, setLooping, setVolume, add/removePlayerListener, isPlaying, getVideoResolution, getDurationMs, getCurrentPositionMs, getBufferedPositionMs, getCurrentSegmentIndex, getStreamingProtocol, getMedias<br><br>
+<strong>Missing on Media3 (27):</strong> setPlaybackAnalyticsSession, setAlternateAudioSource, setAudioTrack, setRendererConfiguration, setRendererComponent, setScrubbingMode, setSeekMode, seekToAbsolutePosition, seekToInSegment, setPreferredLocale, setMediaMetadataProvider, setMediaModel, setRepeatMode, setShouldPlayWithRealTimer, setScreenOnWhilePlaying, initialize, recycle, resume, isPlaybackSupported, hasSurface, updateSurface, updateDurationMs, readFrame, getFirstMediaUri, getAbsoluteDurationMs, getCurrentAbsolutePositionMs, retainLastFrame
+</div><div class="sd-tt-tag" style="background:rgba(86,212,221,.15);color:var(--sd-cyan)">PARITY CONTRACT — 21/48 done</div></div>
 </div>
 </div>
 </div>
@@ -676,38 +683,50 @@ ul{padding-left:18px;margin:4px 0}li{margin:2px 0}p{margin:6px 0}
 <div class="sd-layer-label"><span class="sd-ln">Layer 3</span><span class="sd-lt">Players</span></div>
 <div class="sd-layer-content">
 <div class="sd-ab-split">
-<!-- ExoPlayer path -->
-<div class="sd-ab-path sd-ab-path-exo">
-<div class="sd-ab-label sd-ab-label-exo">ExoPlayer Path (flag OFF)</div>
-<div class="sd-ab-nodes">
-<div class="sd-node sd-node-exo" style="min-width:90px">
-<div class="sd-nn">ScExoPlayer</div><div class="sd-nd">1,660 lines · 67 methods</div>
-<div class="sd-tooltip"><div class="sd-tt-title">ScExoPlayer</div><div class="sd-tt-body">The behavioral center of the ExoPlayer stack. Task-executed wrapper with renderer messaging, analytics hooks, seek semantics, alternate audio. NOT a simple engine wrapper. Media3MediaPlayer replaces this entire chain.</div><div class="sd-tt-tag" style="background:rgba(188,140,255,.15);color:var(--sd-purple)">ExoPlayer-only — no dup needed</div></div>
+<!-- SHARED wrapper chain (both paths use this) -->
+<div class="sd-ab-path" style="background:rgba(86,212,221,.04);border-color:rgba(86,212,221,.2);flex:0 0 auto;min-width:220px">
+<div class="sd-ab-label" style="background:rgba(86,212,221,.15);color:var(--sd-cyan)">SHARED — Both paths use these (0 ExoPlayer imports)</div>
+<div class="sd-ab-nodes" style="flex-direction:column;gap:4px">
+<div class="sd-node sd-node-shared" style="width:100%">
+<div class="sd-nn">UnifiedMediaPlayer</div><div class="sd-nd">878 lines · state machine · model parsing · scheduling</div>
+<div class="sd-tooltip" style="width:320px"><div class="sd-tt-title">UnifiedMediaPlayer — ZERO ExoPlayer imports</div><div class="sd-tt-body">Pure business logic: SnapDoc model parsing, state machine (IDLE→PREPARING→PLAYING→...), task serialization, audio volume semantics (SNAP/MUSIC/VOICE_OVER), playback rate extraction. Delegates to <code>TimelinePlayerInterface</code>. <strong>Works unchanged with Media3 underneath.</strong></div><div class="sd-tt-tag" style="background:rgba(86,212,221,.1);color:var(--sd-cyan)">UNCHANGED — zero migration needed</div></div>
 </div>
-<div class="sd-ab-arrow">→</div>
-<div class="sd-node sd-node-exo" style="min-width:90px">
-<div class="sd-nn">TimelinePlayer</div><div class="sd-nd">1,186 lines</div>
+<div style="text-align:center;color:var(--sd-td);font-size:.7em">↓ delegates to TimelinePlayerInterface</div>
+<div class="sd-node sd-node-shared" style="width:100%">
+<div class="sd-nn">TimelinePlayer</div><div class="sd-nd">1,186 lines · multi-player A/V sync · segment seek · loops</div>
+<div class="sd-tooltip" style="width:320px"><div class="sd-tt-title">TimelinePlayer — ZERO ExoPlayer imports</div><div class="sd-tt-body">Multi-player coordination, A/V timeline alignment, segment-aware seeking, loop management. <strong>Only coupling:</strong> <code>ScExoPlayerFactory</code> field typed to concrete class. Fix: extract <code>ScPlayerFactory</code> interface → both paths plug in. <strong>All business logic preserved.</strong></div><div class="sd-tt-tag" style="background:rgba(86,212,221,.1);color:var(--sd-cyan)">1 type change: ScExoPlayer → ScPlayerInterface</div></div>
 </div>
-<div class="sd-ab-arrow">→</div>
-<div class="sd-node sd-node-exo" style="min-width:90px">
-<div class="sd-nn">UnifiedMediaPlayer</div><div class="sd-nd">878 lines</div>
-</div>
-<div class="sd-ab-arrow">→</div>
-<div class="sd-node sd-node-exo" style="min-width:90px">
-<div class="sd-nn">ExoMediaPlayer</div><div class="sd-nd">311 lines</div>
-</div>
+<div style="text-align:center;color:var(--sd-td);font-size:.7em">↓ creates players via factory</div>
 </div>
 </div>
 <!-- Divider -->
+<div class="sd-ab-divider"><span class="sd-ab-or">↙ ↘</span></div>
+<!-- Engine split: ScExoPlayer vs ScMedia3Player -->
+<div style="display:flex;gap:0;flex:1">
+<div class="sd-ab-path sd-ab-path-exo" style="flex:1">
+<div class="sd-ab-label sd-ab-label-exo">ExoPlayer Engine (flag OFF)</div>
+<div class="sd-ab-nodes">
+<div class="sd-node sd-node-exo" style="flex:1">
+<div class="sd-nn">ScExoPlayer</div><div class="sd-nd">1,660 lines · 22 ExoPlayer imports · renderer msgs · analytics</div>
+<div class="sd-tooltip" style="width:320px"><div class="sd-tt-title">ScExoPlayer — ExoPlayer Engine</div><div class="sd-tt-body">The ExoPlayer-coupled engine layer: creates <code>com.google.android.exoplayer2.ExoPlayer</code>, sends renderer messages, manages <code>MediaSourceManager</code>, wires <code>AnalyticsListener</code>, handles seek parameters. <strong>This is the ONLY class that needs a Media3 counterpart.</strong> All wrapper behavior above (UnifiedMediaPlayer, TimelinePlayer) is preserved.</div><div class="sd-tt-tag" style="background:rgba(188,140,255,.15);color:var(--sd-purple)">Stays as-is during A/B</div></div>
+</div>
+</div>
+</div>
 <div class="sd-ab-divider"><span class="sd-ab-or">OR</span></div>
-<!-- Media3 path -->
-<div class="sd-ab-path sd-ab-path-m3">
-<div class="sd-ab-label sd-ab-label-m3">Media3 Path (flag ON)</div>
+<div class="sd-ab-path sd-ab-path-m3" style="flex:1">
+<div class="sd-ab-label sd-ab-label-m3">Media3 Engine (flag ON)</div>
 <div class="sd-ab-nodes">
 <div class="sd-node sd-node-m3" style="flex:1">
-<span class="sd-badge sd-b-branch">ON BRANCH</span>
-<div class="sd-nn">Media3MediaPlayer</div><div class="sd-nd">343 lines · Direct implementation · No wrapper chain</div>
-<div class="sd-tooltip"><div class="sd-tt-title">Media3MediaPlayer</div><div class="sd-tt-body">Simple, direct MediaPlayerInterface implementation backed by <code>androidx.media3.exoplayer.ExoPlayer</code>. Currently uses DefaultDataSource — custom Snap data sources wired in Phase 2. 21 methods implemented, 27 no-op/default.</div><div class="sd-tt-tag" style="background:rgba(210,153,34,.2);color:var(--sd-yellow)">ON BRANCH — 343 lines</div></div>
+<span class="sd-badge sd-b-todo">NEW</span>
+<div class="sd-nn">ScMedia3Player</div><div class="sd-nd">~1,200 lines est. · implements ScPlayerInterface · Media3 APIs</div>
+<div class="sd-tooltip" style="width:340px"><div class="sd-tt-title">ScMedia3Player — NEW, replaces ScExoPlayer</div><div class="sd-tt-body">Implements <code>ScPlayerInterface</code> (extracted from ScExoPlayer) using <code>androidx.media3.exoplayer.ExoPlayer</code>. Must replicate:<br>
+• Renderer message bus → Media3 <code>createMessage()</code><br>
+• MediaSourceManager → Media3 MediaSource APIs<br>
+• AnalyticsListener → Media3 AnalyticsListener<br>
+• SeekParameters, ForegroundMode, track selection<br>
+• Error handling: PlaybackException (no ExoPlaybackException)<br><br>
+<strong>Key difference from old plan:</strong> This class lives INSIDE the wrapper chain, not outside it. UnifiedMediaPlayer and TimelinePlayer work unchanged above it.</div><div class="sd-tt-tag" style="background:rgba(88,166,255,.15);color:var(--sd-blue)">CORE MIGRATION WORK — ~1,200 lines</div></div>
+</div>
 </div>
 </div>
 </div>
@@ -830,12 +849,14 @@ ul{padding-left:18px;margin:4px 0}li{margin:2px 0}p{margin:6px 0}
 <!-- Info cards -->
 <div class="sd-info">
 <div class="sd-info-card">
-<h4><div class="sd-ic-dot" style="background:var(--sd-blue)"></div>A/B Mechanism</h4>
-<p>Both libraries coexist — different Java packages, zero conflicts. <code>MediaPlayerFactoryImpl</code> reads COF flag at player creation time. Server-side rollback: flip flag, instant revert.</p>
+<h4><div class="sd-ic-dot" style="background:var(--sd-cyan)"></div>Corrected Architecture</h4>
+<p>Swap at <code>ScExoPlayer</code> level, <strong>not</strong> at factory level. Wrappers stay unchanged.</p>
 <ul>
-<li>Build: both deps compiled into same APK</li>
-<li>Runtime: flag selects implementation per user</li>
-<li>Rollback: server-side, no app update needed</li>
+<li><strong>UnifiedMediaPlayer</strong> — 0 ExoPlayer imports, unchanged</li>
+<li><strong>TimelinePlayer</strong> — 0 ExoPlayer imports, 1 type change</li>
+<li><strong>ScExoPlayer → ScMedia3Player</strong> — the ONLY new player class</li>
+<li>All 48 MediaPlayerInterface methods preserved via wrapper chain</li>
+<li>4,035 lines of business logic reused, not rewritten</li>
 </ul>
 </div>
 <div class="sd-info-card">
@@ -849,8 +870,10 @@ ul{padding-left:18px;margin:4px 0}li{margin:2px 0}p{margin:6px 0}
 <div class="sd-info-card">
 <h4><div class="sd-ic-dot" style="background:var(--sd-yellow)"></div>Migration Scope</h4>
 <ul>
-<li><strong>42</strong> files to DUPLICATE (package rename)</li>
-<li><strong>5</strong> files to REWRITE (API changes)</li>
+<li><strong>~10</strong> files — package swap only (~12 import changes each)</li>
+<li><strong>~5</strong> files — extract Snap core + thin adapters</li>
+<li><strong>~14</strong> files — full duplication (deep base class coupling)</li>
+<li><strong>5</strong> files — full rewrite (fork-only APIs)</li>
 <li><strong>2</strong> files ON BRANCH (not merged)</li>
 <li><strong>~40</strong> ExoPlayer-only (no dup needed)</li>
 <li><strong>152</strong> dead code to delete (Phase 7)</li>
@@ -1343,7 +1366,51 @@ com.google.android.exoplayer2.util.LibraryLoader                // Native loadin
 
 <!-- ============ PHASES TAB ============ -->
 <div class="tab-panel" id="tab-phases">
-<p style="color:var(--td);margin-bottom:16px">Detailed phase breakdown with validated task lists. Click components tab for per-file details.</p>
+<p style="color:var(--td);margin-bottom:16px">Detailed phase breakdown with validated task lists. Each step = one PR with test plan and regression checks.</p>
+
+<!-- Interface-First Strategy Banner -->
+<div class="card open" style="border-left:3px solid var(--a)"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Migration Strategy: Interface-First, Not Brute-Force Duplication</span></div>
+<div class="card-b">
+<div class="brk" style="margin-bottom:14px"><strong>Critical architecture correction:</strong> The current <code>Media3MediaPlayer</code> bypasses the entire wrapper chain (UnifiedMediaPlayer → TimelinePlayer → ScExoPlayer). This <strong>loses all wrapper behavior</strong>: SnapDoc parsing, state machine, multi-player A/V sync, segment-aware seek, loop management, task scheduling. The correct approach: swap the engine at the <code>ScExoPlayer</code> level, keep the wrappers unchanged.</div>
+
+<div style="border:1px solid var(--bd);border-radius:8px;padding:14px;margin-bottom:16px;background:var(--s2)">
+<h4 style="margin-bottom:10px;color:var(--a)">Corrected Architecture: Swap at ScExoPlayer, Not at Factory</h4>
+<div class="codeblk" style="font-size:.82em">WRONG (current):
+  MediaPlayerFactoryImpl
+    └─ useMedia3Player=true → Media3MediaPlayer (343 lines, flat)
+       ❌ LOSES: SnapDoc parsing, state machine, multi-player sync,
+                 segment seek, loop mgmt, task scheduling, analytics
+
+CORRECT:
+  MediaPlayerFactoryImpl
+    └─ useMedia3Player=true → UnifiedMediaPlayer (UNCHANGED — zero ExoPlayer imports)
+                                └─ TimelinePlayer (UNCHANGED — zero ExoPlayer imports)
+                                     └─ ScMedia3Player (NEW — replaces ScExoPlayer)
+                                          └─ androidx.media3.exoplayer.ExoPlayer
+       ✅ KEEPS: All 4,035 lines of battle-tested wrapper behavior</div>
+<p style="color:var(--td);font-size:.85em;margin-top:8px"><strong>What changes:</strong> Extract <code>ScPlayerInterface</code> from <code>ScExoPlayer</code>. Create <code>ScMedia3Player</code> implementing it. Change <code>TimelinePlayer</code> field types. That's it — UnifiedMediaPlayer and TimelinePlayer work unchanged because they have <strong>zero ExoPlayer imports</strong>.</p>
+</div>
+
+<p style="margin-bottom:12px">With the corrected architecture, the file migration falls into these categories:</p>
+<table>
+<tr><th>Strategy</th><th>When to Use</th><th>Files</th><th>Lines</th><th>New Code</th></tr>
+<tr style="background:rgba(63,185,80,.06)"><td><strong style="color:var(--g)">Package Swap</strong><br><span style="font-size:.8em;color:var(--td)">~12 import changes per file</span></td><td>File implements/extends ExoPlayer interface but 80%+ is Snap business logic. ExoPlayer and Media3 APIs are isomorphic.</td><td>NetworkManagerDS, NativeContentMgrDS, PrefetchAwareDS, SnapCodecAdapterFactory, SyncCodecAdapterFactory, SnapDefaultDS, SnapDefaultDSFactory, DataSourceTracker, codec selection policies</td><td>~1,500</td><td>~100 lines of import changes total</td></tr>
+<tr style="background:rgba(88,166,255,.06)"><td><strong style="color:var(--a)">Extract Snap Core</strong><br><span style="font-size:.8em;color:var(--td)">Pull logic into library-agnostic class + thin adapters</span></td><td>File has substantial Snap business logic (65%+) that is completely independent of ExoPlayer. The ExoPlayer/Media3 wiring is thin adapter code.</td><td>VolumeNormalizationProcessor → extract DSP core<br>SnapBandwidthMeter → extract AbstractSnapBandwidthMeter<br>EncryptedDataSource → extract SnapDataSpec<br>CacheProvider → extract SnapCacheProvider<br>DelegateLoadControl → extract AbstractDelegateControl&lt;T&gt;</td><td>~685</td><td>~350 lines shared core + ~200 lines adapters</td></tr>
+<tr style="background:rgba(210,153,34,.06)"><td><strong style="color:var(--y)">Full Duplication</strong><br><span style="font-size:.8em;color:var(--td)">Separate Media3 copy in media3/ dir</span></td><td>File extends deep ExoPlayer base class (BaseRenderer, DefaultRenderersFactory) where Media3 changed method signatures. No meaningful shared interface exists.</td><td>ScBaseRenderer, ScVideoRenderer, ScAudioRenderer, ScImageRenderer, DefaultSnapRenderersFactory, SnapMediaCodecVideoRenderer, SnapMediaCodecAudioRenderer, LazyCache, TraceSimpleCache, extractors</td><td>~3,200</td><td>~3,200 lines (unavoidable)</td></tr>
+<tr style="background:rgba(248,81,73,.06)"><td><strong style="color:var(--r)">Full Rewrite</strong><br><span style="font-size:.8em;color:var(--td)">New implementation from scratch</span></td><td>Fork-only APIs. Cannot extend, cannot adapt, must rebuild.</td><td>AsyncMediaCodecAdaptorFactory, CacheBasedTrackSelector, CacheBasedAdaptiveTrackSelection, Dav1dSoftwareDecoderInstaller, Dav1dLibraryLoader</td><td>~570</td><td>~500 lines new</td></tr>
+</table>
+<div class="act" style="margin-top:10px"><strong>Result:</strong> Instead of duplicating 5,955 lines across 42 files, we write ~4,350 lines total — of which ~350 lines are shared library-agnostic core that is independently testable. The largest savings come from NOT duplicating the ~1,500 lines of data source files that need only import changes.</div>
+
+<div style="margin-top:14px">
+<h4 style="font-size:.85em;color:var(--td);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Why Interface-First Is Better</h4>
+<ul>
+<li><strong>Less code to maintain:</strong> Shared core has ONE implementation of business logic, not two copies that drift</li>
+<li><strong>Easier testing:</strong> Extracted cores (VolumeNormalizationDsp, AbstractSnapBandwidthMeter) are unit-testable with zero ExoPlayer/Media3 dependency</li>
+<li><strong>Cleaner cleanup:</strong> When ExoPlayer is removed (Phase 7), delete the ExoPlayer adapter — shared core stays, Media3 adapter stays. No logic migration needed.</li>
+<li><strong>DataSpec migration:</strong> The one structural API change — <code>DataSpec</code> positional constructor → <code>DataSpec.Builder</code> in Media3 — affects ~8 call sites total. A shared <code>SnapDataSpec</code> type handles this once.</li>
+</ul>
+</div>
+</div></div>
 
 <div class="card open"><div class="card-h" onclick="tog(this)"><span class="chev">▶</span><span class="card-title">Phase 0: Foundation</span><span class="badge b-med">IN PROGRESS</span><span class="badge" style="background:rgba(88,166,255,.2);color:var(--a)">1-2 weeks</span></div>
 <div class="card-b">
@@ -1661,77 +1728,103 @@ class Media3EligibilityPolicy {
 <div class="card-b">
 <div class="step-tabs" data-group="p1">
 <button class="active" onclick="showStep(this,'p1','s0')">Overview</button>
-<button onclick="showStep(this,'p1','s1')">Step 1: Factory Routing</button>
-<button onclick="showStep(this,'p1','s2')">Step 2: Media3MediaPlayer</button>
-<button onclick="showStep(this,'p1','s3')">Step 3: Device Validation</button>
-<button onclick="showStep(this,'p1','s4')">Step 4: Parity Tests</button>
+<button onclick="showStep(this,'p1','s1')">Step 1: Extract ScPlayerInterface</button>
+<button onclick="showStep(this,'p1','s2')">Step 2: ScMedia3Player</button>
+<button onclick="showStep(this,'p1','s3')">Step 3: Factory Routing</button>
+<button onclick="showStep(this,'p1','s4')">Step 4: Device Validation</button>
+<button onclick="showStep(this,'p1','s5')">Step 5: Parity Tests</button>
 </div>
 <div class="step-panel active" id="p1-s0">
-<p style="color:var(--td);margin-bottom:8px">Code exists on branch <code>myu/exoplayer-to-media3-v2</code> (uncommitted). Needs: commit, PR, review, merge, device validation.</p>
-<div class="brk" style="margin-bottom:12px"><strong>Codex findings addressed:</strong><br>
-• <strong>Test infra blocked:</strong> <code>media3-test-utils:1.5.1</code> must be mirrored before tests can run (see P0 Step 6)<br>
-• <strong>Tests are smoke, not parity:</strong> Current tests only cover boolean routing and basic lifecycle. No coverage for layered audio, preview/edit, locale, segment seeking, subtitles, analytics parity, or warmup (see Step 4)<br>
-• <strong>Behavior gaps:</strong> StubAudioManager not wired in Media3, Opera surfaces depend on alternate-audio and locale. Mitigated by P0 Step 8 capability routing — ineligible requests fall back to ExoPlayer.<br>
-• <strong>Preview/edit omitted:</strong> <code>PreviewPlaybackComponentsFactory</code> uses <code>ScTrackSelector</code> (depends on <code>TrackGroupArray</code>). This is a separate migration lane — acknowledged in P1, deferred to P4.</p></div>
+<div class="brk" style="margin-bottom:12px"><strong>Architecture correction:</strong> The current <code>Media3MediaPlayer</code> on branch bypasses the wrapper chain. The corrected approach swaps at the <code>ScExoPlayer</code> level — <code>UnifiedMediaPlayer</code> and <code>TimelinePlayer</code> stay unchanged (zero ExoPlayer imports). This preserves all 4,035 lines of business logic.</div>
 <table><tr><th>Task</th><th>Status</th><th>Notes</th></tr>
-<tr><td>Media3MediaPlayer (343 lines)</td><td style="color:var(--y)">ON BRANCH</td><td>Untracked file — needs commit &amp; PR</td></tr>
-<tr><td>Factory routing</td><td style="color:var(--y)">ON BRANCH</td><td>Unstaged changes — needs commit &amp; PR</td></tr>
-<tr><td>Unit tests (17 + 7 tests)</td><td style="color:var(--y)">ON BRANCH</td><td>Smoke tests only — parity tests in Step 4</td></tr>
-<tr><td>Device validation</td><td style="color:var(--r)">TODO</td><td>3+ devices, DASH/HLS/Progressive</td></tr>
-<tr><td>Parity test plan</td><td style="color:var(--r)">TODO</td><td>Test every MediaPlayerInterface method behavior, not just routing</td></tr>
-<tr><td>PR review &amp; merge</td><td style="color:var(--r)">TODO</td><td>Depends on P0 Steps 6-8 (test infra, consolidation, capability routing)</td></tr>
+<tr><td><strong>Extract ScPlayerInterface</strong></td><td style="color:var(--r)">TODO</td><td>Extract interface from ScExoPlayer. Change TimelinePlayer field types.</td></tr>
+<tr><td><strong>Create ScMedia3Player</strong></td><td style="color:var(--r)">TODO</td><td>Implement ScPlayerInterface using <code>androidx.media3.exoplayer.ExoPlayer</code>. ~1,200 lines.</td></tr>
+<tr><td><strong>Create ScMedia3PlayerFactory</strong></td><td style="color:var(--r)">TODO</td><td>Implements ScPlayerFactory interface. Returns ScMedia3Player.</td></tr>
+<tr><td>Factory routing (flag → factory selection)</td><td style="color:var(--y)">ON BRANCH (needs rework)</td><td>Route through wrapper chain, not bypass it. Select ScPlayerFactory, not MediaPlayerInterface.</td></tr>
+<tr><td>Media3MediaPlayer (343 lines)</td><td style="color:var(--y)">ON BRANCH</td><td>Becomes reference/prototype. ScMedia3Player replaces it as the real implementation.</td></tr>
+<tr><td>Device validation</td><td style="color:var(--r)">TODO</td><td>3+ devices. Key test: all wrapper behavior works with Media3 engine.</td></tr>
+<tr><td>Parity tests</td><td style="color:var(--r)">TODO</td><td>Wrapper chain produces identical behavior on both engine paths.</td></tr>
 </table>
 </div>
 
 <div class="step-panel" id="p1-s1">
 <div class="pr-box">
-<h4>PR: Add Media3 player routing in MediaPlayerFactoryImpl</h4>
-<p style="color:var(--td);font-size:.88em">Adds <code>useMedia3Player</code> boolean check at factory level to route player creation to the new Media3 path when the flag is enabled. Default: off.</p>
+<h4>PR: Extract ScPlayerInterface and ScPlayerFactory from ScExoPlayer</h4>
+<p style="color:var(--td);font-size:.88em">Extract an interface from <code>ScExoPlayer</code> that captures its public contract. Change <code>TimelinePlayer</code> and <code>ScExoPlayerFactory</code> to use the interface. This is a pure refactor — zero behavior change — and enables the Media3 engine to slot in.</p>
 <div class="pr-section"><h5>Files Changed</h5>
 <ul class="file-list">
-<li><span class="fp">playback/core/.../player/MediaPlayerFactoryImpl.kt</span> <span class="action modify">MODIFY</span> — Add <code>if (playbackConfiguration.useMedia3Player)</code> branch at line 77</li>
-<li><span class="fp">playback/config/api/.../PlaybackConfiguration.kt</span> <span class="action modify">MODIFY</span> — Add <code>val useMedia3Player: Boolean = false</code> (line 126)</li>
-<li><span class="fp">playback/config/core/.../PlaybackCofConfigKey.kt</span> <span class="action modify">MODIFY</span> — Add <code>PLAYBACK_USE_MEDIA3_PLAYER</code> COF key (lines 140-143)</li>
-<li><span class="fp">playback/config/core/.../PlaybackConfigurationKey.kt</span> <span class="action modify">MODIFY</span> — Add Tweak for <code>PLAYBACK_USE_MEDIA3_PLAYER</code> (lines 62-66, requireRestart=true)</li>
-<li><span class="fp">playback/config/core/.../PlaybackCofSnapshot.kt</span> <span class="action modify">MODIFY</span> — Wire <code>useMedia3Player</code> in <code>toPlaybackConfiguration()</code> and <code>updateConfiguration()</code></li>
-<li><span class="fp">playback/core/src/test/.../MediaPlayerFactoryImplTest.kt</span> <span class="action modify">MODIFY</span> — Add 3 tests: flag false → UnifiedMediaPlayer, flag true → Media3MediaPlayer, default is false</li>
+<li><span class="fp">player/ScPlayerInterface.kt</span> <span class="action create">CREATE</span> — Interface extracted from ScExoPlayer's public methods. Key methods: <code>setVideoSurface</code>, <code>prepare</code>, <code>start</code>, <code>stop</code>, <code>release</code>, <code>seekTo</code>, <code>setPlaybackParameters</code>, <code>setForegroundMode</code>, <code>sendMessageToRenderers</code>, <code>addAnalyticsListener</code>, <code>currentPosition</code>, <code>duration</code>, <code>bufferedPosition</code>, <code>currentMediaItemIndex</code>, etc.</li>
+<li><span class="fp">player/ScPlayerFactory.kt</span> <span class="action create">CREATE</span> — Interface: <code>fun createScPlayer(...): ScPlayerInterface</code></li>
+<li><span class="fp">player/ScExoPlayer.kt</span> <span class="action modify">MODIFY</span> — Add <code>: ScPlayerInterface</code> to class declaration. Zero logic changes.</li>
+<li><span class="fp">player/ScExoPlayerFactory.kt</span> <span class="action modify">MODIFY</span> — Implement <code>ScPlayerFactory</code>. Return type → <code>ScPlayerInterface</code>.</li>
+<li><span class="fp">player/TimelinePlayer.kt</span> <span class="action modify">MODIFY</span> — Change <code>players: ArrayList&lt;ScExoPlayer&gt;</code> → <code>ArrayList&lt;ScPlayerInterface&gt;</code>. Change <code>videoTrackPlayer</code>/<code>audioTrackPlayer</code> types. Fix <code>ScExoPlayer.playMedia()</code> extension → move to interface or polymorphism.</li>
+<li><span class="fp">player/TimelinePlayerV2.kt</span> <span class="action modify">MODIFY</span> — Same type changes as TimelinePlayer.</li>
 </ul></div>
-<div class="pr-section"><h5>Key Implementation Detail</h5>
-<div class="codeblk">// MediaPlayerFactoryImpl.kt line 77
-if (playbackRequest.playbackConfiguration.useMedia3Player == true) {
-    return Media3MediaPlayer(
-        context = mediaEnginePlayerDependencies.context,
-        drawingSurface = playbackRequest.drawingView,
-        playbackConfiguration = playbackRequest.playbackConfiguration
-    )
+<div class="pr-section"><h5>Key Design</h5>
+<div class="codeblk">// ScPlayerInterface.kt — extracted from ScExoPlayer's 67 public methods
+interface ScPlayerInterface : MediaPlayerInterface {
+    fun sendMessageToRenderers(messageType: Int, payload: Any?)
+    fun setPlaybackAnalyticsSession(session: PlaybackAnalyticsSession)
+    fun setRendererConfiguration(vararg configs: RendererConfiguration)
+    fun setScrubbingMode(mode: ScrubbingMode)
+    fun setSeekMode(mode: SeekMode)
+    fun setAlternateAudioSource(source: AlternateAudioSource)
+    fun setPreferredLocale(locale: Locale?)
+    // ... all methods that wrappers call on ScExoPlayer
+}
+
+// ScPlayerFactory.kt
+interface ScPlayerFactory {
+    fun createScPlayer(
+        playbackComponents: PlaybackComponents,
+        playerContext: PlayerContext,
+        mediaEnginePlayerDependencies: MediaEnginePlayerDependencies
+    ): ScPlayerInterface
 }</div></div>
 <div class="pr-section"><h5>Test Plan</h5>
 <div class="test-grid">
-<div class="test-card"><h6>Unit Tests (3 tests)</h6>
-<p><code>useMedia3Player_false_returnsUnifiedMediaPlayer</code></p>
-<p><code>useMedia3Player_true_returnsMedia3MediaPlayer</code></p>
-<p><code>defaultConfig_useMedia3Player_isFalse</code></p></div>
-<div class="test-card"><h6>Regression Check</h6>
-<p>Flag is default OFF — no production behavior change</p>
-<p>Verify <code>bzl test //snapchat/platform/media/playback/core:test</code> passes</p>
-<p>Verify existing player creation paths unchanged when flag=false</p></div>
+<div class="test-card"><h6>Unit Tests</h6>
+<p>All existing ScExoPlayer/TimelinePlayer/UnifiedMediaPlayer tests pass unchanged</p>
+<p>Pure refactor — interface extraction only</p></div>
+<div class="test-card"><h6>Regression</h6>
+<p>Zero behavior change. All players still ScExoPlayer underneath.</p>
+<p><code>bzl test //snapchat/platform/media/playback/core:test</code> — all 99 tests pass</p>
+<p>Device test: play Spotlight/Chat/Stories — identical to before</p></div>
 </div></div>
 </div></div>
 
 <div class="step-panel" id="p1-s2">
 <div class="pr-box">
-<h4>PR: Implement Media3MediaPlayer with basic playback</h4>
-<p style="color:var(--td);font-size:.88em">New <code>MediaPlayerInterface</code> implementation backed by <code>androidx.media3.exoplayer.ExoPlayer</code>. Supports basic play/pause/seek/volume. Uses <code>DefaultDataSource</code> (to be replaced in Phase 2).</p>
+<h4>PR: Implement ScMedia3Player — Media3 engine behind ScPlayerInterface</h4>
+<p style="color:var(--td);font-size:.88em">The core migration work. Implements <code>ScPlayerInterface</code> using <code>androidx.media3.exoplayer.ExoPlayer</code>. Slots into the existing wrapper chain — <code>UnifiedMediaPlayer</code> and <code>TimelinePlayer</code> work unchanged above it. Starts with basic playback, grows incrementally as data sources/renderers/ABR are ported in later phases.</p>
 <div class="pr-section"><h5>Files Changed</h5>
 <ul class="file-list">
-<li><span class="fp">playback/core/.../media3/Media3MediaPlayer.kt</span> <span class="action create">CREATE</span> — 343 lines. Implements MediaPlayerInterface with Media3 ExoPlayer</li>
-<li><span class="fp">playback/core/BUILD.bazel</span> <span class="action modify">MODIFY</span> — Add 8 Media3 deps (<code>@android_mvn//:androidx_media3_media3_*</code>)</li>
-<li><span class="fp">dependencies/maven_dependencies.yaml</span> <span class="action modify">MODIFY</span> — Add Media3 1.5.1 Maven artifacts</li>
-<li><span class="fp">opera/proguard-rules.pro</span> <span class="action modify">MODIFY</span> — Add <code>-dontnote androidx.media3.**</code></li>
-<li><span class="fp">playback/core/src/test/.../media3/Media3MediaPlayerTest.kt</span> <span class="action create">CREATE</span> — 17 unit tests</li>
+<li><span class="fp">player/media3/ScMedia3Player.kt</span> <span class="action create">CREATE</span> — ~1,200 lines estimated. Implements <code>ScPlayerInterface</code> using <code>androidx.media3.exoplayer.ExoPlayer</code>. Mirrors ScExoPlayer's 67 methods with Media3 APIs.</li>
+<li><span class="fp">player/media3/ScMedia3PlayerFactory.kt</span> <span class="action create">CREATE</span> — Implements <code>ScPlayerFactory</code>. Creates <code>ScMedia3Player</code> with Media3 <code>PlaybackComponents</code>.</li>
+<li><span class="fp">player/media3/Media3MediaSourceManager.kt</span> <span class="action create">CREATE</span> — Media3 equivalent of <code>MediaSourceManager</code>. Uses <code>media3.exoplayer.source.*</code> for playlist/concat/merge/clip.</li>
+<li><span class="fp">player/MediaPlayerFactoryImpl.kt</span> <span class="action modify">MODIFY</span> — When <code>useMedia3Player=true</code>, create <code>ScMedia3PlayerFactory</code> and pass to <code>TimelinePlayer</code>. Do NOT bypass wrapper chain.</li>
+<li><span class="fp">player/media3/ScMedia3PlayerTest.kt</span> <span class="action create">CREATE</span></li>
 </ul></div>
-<div class="pr-section"><h5>Implemented Methods (functional)</h5>
-<p style="font-size:.85em"><code>setSurface</code>, <code>setMedia</code>, <code>prepareAsync</code>, <code>start</code>, <code>stop</code>, <code>release</code>, <code>pause</code>, <code>seekTo</code>, <code>setPlaybackRate</code>, <code>setLooping</code>, <code>setVolume</code>, <code>addPlayerListener</code>, <code>removePlayerListener</code>, <code>isPlaying</code>, <code>getVideoResolution</code>, <code>getDurationMs</code>, <code>getCurrentPositionMs</code>, <code>getBufferedPositionMs</code>, <code>getCurrentSegmentIndex</code>, <code>getStreamingProtocol</code>, <code>getMedias</code></p></div>
+<div class="pr-section"><h5>Key Architecture Difference</h5>
+<div class="codeblk">// OLD (wrong) — bypasses wrappers:
+if (useMedia3Player) return Media3MediaPlayer(...)  // loses all wrapper behavior
+
+// NEW (correct) — swaps engine, keeps wrappers:
+val factory = if (useMedia3Player) ScMedia3PlayerFactory(...) else ScExoPlayerFactory(...)
+val timelinePlayer = TimelinePlayer(factory, ...)  // wrappers unchanged
+return UnifiedMediaPlayer(timelinePlayer, ...)       // full behavior preserved</div></div>
+<div class="pr-section"><h5>ScMedia3Player must implement (from ScPlayerInterface)</h5>
+<p style="font-size:.85em">All 67 methods that ScExoPlayer exposes. The Media3 equivalents:</p>
+<table style="font-size:.85em">
+<tr><th>ScExoPlayer method</th><th>Media3 equivalent</th></tr>
+<tr><td><code>mediaPlayer: ExoPlayer</code></td><td><code>mediaPlayer: androidx.media3.exoplayer.ExoPlayer</code></td></tr>
+<tr><td><code>createMessage(renderer).setType().send()</code></td><td><code>createMessage(renderer).setType().send()</code> — same API in Media3</td></tr>
+<tr><td><code>ExoPlayerBuilder.build()</code></td><td><code>ExoPlayer.Builder(context).build()</code></td></tr>
+<tr><td><code>mediaPlayer.prepare(mediaSource)</code></td><td><code>mediaPlayer.setMediaSource(src); mediaPlayer.prepare()</code></td></tr>
+<tr><td><code>setSeekParameters(SeekParameters.*)</code></td><td><code>setSeekParameters(SeekParameters.*)</code> — same API</td></tr>
+<tr><td><code>analyticsCollector.addListener()</code></td><td>Same API at <code>media3.exoplayer.analytics</code></td></tr>
+<tr><td><code>ExoPlaybackException</code> error handling</td><td><code>PlaybackException</code> with error codes (P3 Step 7 error mapping)</td></tr>
+</table></div>
 <div class="pr-section"><h5>Known Limitations (to fix in later phases)</h5>
 <ul>
 <li>Uses <code>DefaultDataSource</code> — no Snap network stack, no caching (→ Phase 2)</li>
@@ -1765,9 +1858,43 @@ if (playbackRequest.playbackConfiguration.useMedia3Player == true) {
 </div></div>
 
 <!-- P1 Step 3 -->
+<!-- P1 Step 3: Factory routing through wrapper chain -->
 <div class="step-panel" id="p1-s3">
 <div class="pr-box">
-<h4>Validation: Device testing of Media3 basic playback</h4>
+<h4>PR: Route Media3 flag through wrapper chain (not bypass)</h4>
+<p style="color:var(--td);font-size:.88em">When <code>useMedia3Player=true</code>, create <code>ScMedia3PlayerFactory</code> instead of <code>ScExoPlayerFactory</code> and pass it to <code>TimelinePlayer</code>. The wrapper chain (UnifiedMediaPlayer → TimelinePlayer) stays unchanged. All business logic preserved.</p>
+<div class="pr-section"><h5>Files Changed</h5>
+<ul class="file-list">
+<li><span class="fp">player/MediaPlayerFactoryImpl.kt</span> <span class="action modify">MODIFY</span> — Replace the early-return <code>Media3MediaPlayer</code> bypass with factory selection: <code>val factory = if (useMedia3Player) ScMedia3PlayerFactory(...) else ScExoPlayerFactory(...)</code>. Pass factory to <code>createTimelinePlayer(factory, ...)</code>.</li>
+<li><span class="fp">player/MediaPlayerFactoryImpl.kt</span> <span class="action modify">MODIFY</span> — <code>createTimelinePlayer()</code> signature: accept <code>ScPlayerFactory</code> parameter instead of hardcoded <code>ScExoPlayerFactory</code>.</li>
+</ul></div>
+<div class="pr-section"><h5>Key Change</h5>
+<div class="codeblk">// MediaPlayerFactoryImpl.kt — BEFORE (bypasses wrappers):
+if (config.useMedia3Player) return Media3MediaPlayer(...)
+
+// AFTER (routes through wrappers):
+val playerFactory: ScPlayerFactory = if (config.useMedia3Player)
+    ScMedia3PlayerFactory(media3Components)
+else
+    ScExoPlayerFactory(exoComponents)
+
+return createUnifiedMediaPlayer(playerFactory, playbackRequest)</div></div>
+<div class="pr-section"><h5>Test Plan</h5>
+<div class="test-grid">
+<div class="test-card"><h6>Unit Tests</h6>
+<p><code>useMedia3Player_true</code> → returns UnifiedMediaPlayer (NOT bare Media3MediaPlayer)</p>
+<p><code>useMedia3Player_false</code> → returns UnifiedMediaPlayer (same as before)</p>
+<p>Both paths go through TimelinePlayer, just different ScPlayerFactory</p></div>
+<div class="test-card"><h6>Regression</h6>
+<p>Flag OFF: identical behavior. Flag ON: same wrapper chain, different engine.</p>
+<p>Verify UnifiedMediaPlayer state machine works with ScMedia3Player</p>
+<p>Verify TimelinePlayer multi-player coordination works</p></div>
+</div></div>
+</div></div>
+
+<div class="step-panel" id="p1-s4">
+<div class="pr-box">
+<h4>Validation: Device testing of Media3 engine through full wrapper chain</h4>
 <p style="color:var(--td);font-size:.88em">After PRs are merged, validate that the Media3 player path works end-to-end on physical devices. This gates moving to Phase 2.</p>
 <div class="pr-section"><h5>Test Matrix</h5>
 <table>
@@ -1813,8 +1940,8 @@ adb logcat -d | grep -i "ExoMediaPlayer\|ScExoPlayer" | head -5
 </ul></div>
 </div></div>
 
-<!-- P1 Step 4: Parity Tests -->
-<div class="step-panel" id="p1-s4">
+<!-- P1 Step 5: Parity Tests -->
+<div class="step-panel" id="p1-s5">
 <div class="pr-box">
 <h4>PR: Add MediaPlayerInterface parity tests for Media3</h4>
 <p style="color:var(--td);font-size:.88em"><strong>Codex finding:</strong> Current tests are smoke tests, not parity tests. <code>MediaPlayerFactoryImplTest</code> only proves boolean routing. <code>Media3MediaPlayerTest</code> only covers basic lifecycle/state. No coverage for the 27 no-op methods that wrappers actively call.</p>
@@ -2724,7 +2851,7 @@ testutil: DataSourceContractTest, LoopingMediaSource</div></div></div>
 
 <!-- Summary stats -->
 <div class="stats">
-<div class="stat"><div class="val" style="color:var(--g)">42</div><div class="lbl">DUPLICATE (package rename)</div></div>
+<div class="stat"><div class="val" style="color:var(--g)">~10</div><div class="lbl">Package swap only</div></div>
 <div class="stat"><div class="val" style="color:var(--o)">5</div><div class="lbl">REWRITE (API changes)</div></div>
 <div class="stat"><div class="val" style="color:var(--y)">2</div><div class="lbl">ON BRANCH (not merged)</div></div>
 <div class="stat"><div class="val" style="color:var(--td)">14</div><div class="lbl">Deferred (renderer components)</div></div>
