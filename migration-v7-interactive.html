@@ -1,0 +1,3254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ExoPlayer → Media3 1.5.1 Migration Map (V7)</title>
+<style>
+:root{--bg:#0d1117;--s:#161b22;--s2:#1c2333;--s3:#21262d;--bd:#30363d;--t:#e6edf3;--td:#8b949e;--a:#58a6ff;--ad:#1f6feb;--g:#3fb950;--y:#d29922;--o:#db6d28;--r:#f85149;--p:#bc8cff;--cyan:#56d4dd}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--t);line-height:1.6;font-size:14px;overflow:hidden;height:100vh}
+code{font-family:'SF Mono','Fira Code',monospace;font-size:.85em;background:rgba(88,166,255,.08);padding:1px 5px;border-radius:3px;color:var(--a)}
+.app{display:flex;flex-direction:column;height:100vh}
+.hdr{text-align:center;padding:16px;border-bottom:1px solid var(--bd);flex-shrink:0}
+.hdr h1{font-size:1.6em;background:linear-gradient(135deg,var(--a),var(--p));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hdr .sub{color:var(--td);font-size:.85em}
+.main-tabs{display:flex;gap:4px;border-bottom:2px solid var(--bd);padding:8px 16px 0;flex-shrink:0;background:var(--bg)}
+.main-tabs button{background:var(--s);border:1px solid var(--bd);color:var(--td);padding:8px 18px;border-radius:8px 8px 0 0;cursor:pointer;font-size:.9em;white-space:nowrap;transition:all .2s;font-family:inherit}
+.main-tabs button:hover{border-color:var(--a);color:var(--t)}
+.main-tabs button.active{background:var(--ad);border-color:var(--a);color:#fff}
+.tab-content{flex:1;overflow:auto;position:relative}
+.tab-panel{display:none;height:100%}
+.tab-panel.active{display:block}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="hdr">
+<h1>ExoPlayer 2.16 → Media3 1.5.1 Migration Map</h1>
+<div class="sub">V7 — Layer-by-Layer Dependency Graph · 152 RENAME + 3 CREATE · Interactive Explorer</div>
+</div>
+<div class="main-tabs">
+<button class="active" onclick="switchTab('graph')">Dependency Graph</button>
+<button onclick="switchTab('gapanalysis')">Gap Analysis</button>
+<button onclick="switchTab('consumers')">Ad-Hoc Consumers</button>
+<button onclick="switchTab('breaking')">Breaking Changes</button>
+</div>
+<div class="tab-content">
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- TAB 1: DEPENDENCY GRAPH WITH INFINITE CANVAS                   -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="tab-graph" class="tab-panel active">
+<style>
+#tab-graph{position:relative;overflow:hidden;background:var(--bg)}
+#graph-canvas{width:100%;height:100%;cursor:grab;position:absolute;top:0;left:0}
+#graph-canvas.dragging{cursor:grabbing}
+#graph-controls{position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:4px;z-index:20}
+#graph-controls button{width:32px;height:32px;background:var(--s);border:1px solid var(--bd);border-radius:6px;color:var(--t);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;font-family:monospace}
+#graph-controls button:hover{border-color:var(--a);background:var(--s2)}
+#graph-legend{position:absolute;top:12px;left:12px;background:var(--s);border:1px solid var(--bd);border-radius:8px;padding:10px 14px;z-index:20;font-size:11px}
+#graph-legend .leg-item{display:flex;align-items:center;gap:6px;margin:3px 0}
+#graph-legend .leg-dot{width:10px;height:10px;border-radius:3px}
+#graph-stats{position:absolute;bottom:12px;left:12px;background:var(--s);border:1px solid var(--bd);border-radius:8px;padding:8px 14px;z-index:20;font-size:11px;color:var(--td)}
+#graph-minimap{position:absolute;bottom:12px;right:12px;width:180px;height:120px;background:var(--s);border:1px solid var(--bd);border-radius:8px;z-index:20;overflow:hidden}
+#minimap-canvas{width:100%;height:100%}
+#minimap-viewport{position:absolute;border:1.5px solid var(--a);background:rgba(88,166,255,.08);pointer-events:none}
+/* Side Panel */
+#side-panel{position:absolute;top:0;right:0;width:420px;height:100%;background:var(--s);border-left:1px solid var(--bd);z-index:30;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;box-shadow:-4px 0 20px rgba(0,0,0,.4)}
+#side-panel.open{transform:translateX(0)}
+.sp-close{position:absolute;top:8px;right:8px;width:28px;height:28px;background:var(--s2);border:1px solid var(--bd);border-radius:6px;color:var(--td);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}
+.sp-close:hover{border-color:var(--r);color:var(--r)}
+.sp-header{padding:16px;border-bottom:1px solid var(--bd)}
+.sp-name{font-size:15px;font-weight:700;margin-bottom:4px}
+.sp-purpose{font-size:12px;color:var(--td);margin-bottom:8px}
+.sp-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.sp-badge{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase}
+.sp-badge.mech{background:rgba(63,185,80,.15);color:var(--g)}
+.sp-badge.adapt{background:rgba(210,153,34,.15);color:var(--y)}
+.sp-badge.rewrite{background:rgba(248,81,73,.15);color:var(--r)}
+.sp-badge.rename{background:rgba(188,140,255,.15);color:var(--p)}
+.sp-badge.create{background:rgba(88,166,255,.15);color:var(--a)}
+.sp-paths{font-family:'SF Mono',monospace;font-size:11px;margin-top:8px}
+.sp-paths .from{color:var(--r);text-decoration:line-through;opacity:.7}
+.sp-paths .to{color:var(--g)}
+.sp-section{padding:12px 16px;border-bottom:1px solid var(--bd)}
+.sp-section h4{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--td);margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.sp-section h4::before{content:'▸';font-size:10px;transition:transform .2s}
+.sp-section.open h4::before{transform:rotate(90deg)}
+.sp-section-body{display:none;font-size:12px}
+.sp-section.open .sp-section-body{display:block}
+.sp-dep{padding:3px 0;color:var(--a);cursor:pointer;font-family:'SF Mono',monospace;font-size:11px}
+.sp-dep:hover{text-decoration:underline}
+.sp-change{background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;margin:6px 0}
+.sp-change-hdr{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.sp-change-step{background:var(--ad);color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700}
+.sp-change-ver{color:var(--p);font-size:10px}
+.sp-change-desc{font-size:11px;color:var(--td);margin-bottom:6px}
+.sp-code{background:#0d1117;border:1px solid var(--bd);border-radius:4px;padding:6px 8px;font-family:'SF Mono',monospace;font-size:10px;overflow-x:auto;white-space:pre;line-height:1.5;margin:4px 0}
+.sp-code.before{border-left:3px solid var(--r)}
+.sp-code.after{border-left:3px solid var(--g)}
+.sp-code-label{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--td);margin:4px 0 2px}
+/* Layer labels */
+.layer-label{position:absolute;left:0;width:100%;text-align:center;font-size:11px;font-weight:600;color:var(--td);opacity:.5;pointer-events:none;letter-spacing:.1em;text-transform:uppercase}
+</style>
+
+<svg id="graph-canvas">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 1 L 8 5 L 0 9 z" fill="rgba(88,166,255,0.4)"/>
+    </marker>
+  </defs>
+  <g id="graph-world"></g>
+</svg>
+
+<div id="graph-controls">
+  <button onclick="zoomIn()" title="Zoom In">+</button>
+  <button onclick="zoomOut()" title="Zoom Out">−</button>
+  <button onclick="resetView()" title="Reset View">⌂</button>
+  <button onclick="fitAll()" title="Fit All">▣</button>
+</div>
+
+<div id="graph-legend">
+  <div style="font-weight:600;margin-bottom:4px;color:var(--t)">Media3 Plan (border color)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--y)"></div> RENAME (has V2_16 shadow)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--cyan)"></div> ADAPT-PKG (package shadow)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--r)"></div> CREATE (no shadow — gap)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#8b949e"></div> NO ACTION (abstracted)</div>
+  <div style="font-weight:600;margin:6px 0 4px;color:var(--t)">Node label</div>
+  <div class="leg-item" style="font-size:10px">✓V2_16 = has suffix shadow</div>
+  <div class="leg-item" style="font-size:10px">✓PKG = package shadow</div>
+  <div class="leg-item" style="font-size:10px">✗ = no shadow (gap)</div>
+</div>
+
+<div id="graph-stats"></div>
+
+<div id="graph-minimap">
+  <canvas id="minimap-canvas"></canvas>
+  <div id="minimap-viewport"></div>
+</div>
+
+<div id="side-panel">
+  <button class="sp-close" onclick="closeSidePanel()">✕</button>
+  <div id="sp-content"></div>
+</div>
+
+<script>
+// ── Component Data ──
+const LAYERS = [
+  {id:'L5',name:'L5 — Consumers (No changes needed)',y:0,color:'#56d4dd'},
+  {id:'L4',name:'L4 — AB Boundary',y:1,color:'#58a6ff'},
+  {id:'L3',name:'L3 — Player Core',y:2,color:'#bc8cff'},
+  {id:'L2',name:'L2 — Renderers & Codecs',y:3,color:'#f85149'},
+  {id:'L1',name:'L1 — DataSources, Cache, Engine',y:4,color:'#d29922'},
+  {id:'L0',name:'L0 — Decoders & Utilities',y:5,color:'#3fb950'}
+];
+
+// Livegrep base URL
+const LG = 'https://livegrep.sc-corp.net/search?q=class+';
+const LG_REPO = '&repo=Snapchat%2Fmobile';
+const LG_VIEW = 'https://livegrep.sc-corp.net/view/Snapchat/mobile/';
+function lgUrl(name) { return LG + encodeURIComponent(name) + LG_REPO; }
+function lgUrlV2(name) { return LG + encodeURIComponent(name + 'ExoV2_16') + LG_REPO; }
+
+// Shadow status: 'v2_16' = has ExoV2_16 suffix copy, 'package' = has v2_16/ package copy, 'none' = no shadow
+// Plan: 'rename' = rename V2_16→Media3, 'adapt-pkg' = adapt package copy, 'create' = new Media3 from scratch, 'no-action' = fully abstracted
+
+// File path prefixes
+const PB_API = 'android/snapchat/platform/media/playback/api/src/main/java/com/snap/media/playback/api/';
+const PB_CORE = 'android/snapchat/platform/media/playback/core/src/main/java/com/snap/media/playback/core/';
+const PB_PLAYER = PB_CORE + 'player/';
+const PB_RENDER = PB_CORE + 'renderer/';
+const PB_CODEC = PB_CORE + 'codecs/';
+const PB_CACHE = PB_CORE + 'cache/';
+const PB_BW = PB_CORE + 'bandwidth/';
+const PB_ANAL = PB_CORE + 'analytics/';
+const PB_LOG = PB_CORE + 'log/';
+const PB_EXT = PB_CORE + 'extractor/';
+const PB_COMP = PB_CORE + 'player/components/';
+const PB_SHARED = 'android/snapchat/platform/media/playback/shared/src/main/java/com/snap/media/playback/shared/bandwidth/';
+const PB_CFG = 'android/snapchat/platform/media/playback/config/core/src/main/java/com/snap/media/playback/config/core/';
+const ME_BASE = 'android/snapchat/platform/media/media-engine/src/main/java/com/snapchat/mediaengine/';
+const ME_API = 'android/snapchat/platform/media/media-engine/api/src/main/java/com/snapchat/mediaengine/api/';
+const ME_CODEC = ME_BASE + 'pipeline/codec/';
+const ME_EXT = ME_BASE + 'extractor/';
+const ME_AUDIO = ME_BASE + 'audio/';
+const ME_PLR = ME_BASE + 'player/';
+const DEC_API = 'android/snapchat/platform/media/decoders/api/src/main/java/com/snap/media/decoders/api/';
+const DEC_CORE = 'android/snapchat/platform/media/decoders/core/src/main/java/com/snap/media/decoders/core/';
+const DEC_AV1 = DEC_CORE + 'av1/';
+const OPERA_NET = 'android/snapchat/platform/opera/network/src/main/java/com/snap/opera/network/';
+
+const COMP_CAM = 'android/snapchat/components/camera/core/src/main/java/com/snap/camera/subcomponents/mediaplayback/';
+const COMP_MUS = 'android/snapchat/components/music/core/src/main/java/com/snap/music/core/player/';
+const COMP_PRV = 'android/snapchat/components/preview/core/src/main/java/com/snap/preview/player/';
+const COMP_OPR = 'android/snapchat/platform/opera/layers/core/src/main/java/com/snap/opera/layer/playbacklayer/';
+const COMP_LEN = 'android/snapchat/components/lenses/core-camera/src/main/java/com/snap/lenses/videoplayer/';
+const COMP_LM  = 'android/snapchat/components/lenses/core-media/src/main/java/com/snap/lenses/core/media/';
+const COMP_DEV = 'android/snapchat/components/snap-devices/base/src/main/java/com/snap/devices/baseui/';
+const COMP_MSG = 'android/snapchat/components/messaging/screen/chat/src/main/java/com/snap/messaging/chat/features/voicenote/';
+const COMP_CHR = 'android/snapchat/components/cheerios/core/src/main/java/com/snap/cheerios/presenters/';
+const COMP_CHD = 'android/snapchat/components/cheerios/dynamic/core/src/main/java/com/snap/cheerios/fragments/';
+
+// shadow/plan legend: shadow='v2_16'|'package'|'none'; plan='rename'|'adapt-pkg'|'create'|'no-action'
+const C = [
+  // ══════════════════════════════════════════════════════════════
+  // L5 - CONSUMERS (active files — source of truth)
+  // ══════════════════════════════════════════════════════════════
+  // Abstracted consumers (no ExoPlayer imports, use MediaPlayerInterface only)
+  {id:'CameraPlayback',name:'Camera MediaPlayback',layer:'L5',loc:200,effort:'mechanical',shadow:'none',plan:'no-action',purpose:'Uses MediaPlayerFactory — fully abstracted, no ExoPlayer imports',deps:['MediaPlayerFactory'],file:COMP_CAM+'DefaultMediaPlaybackController.kt'},
+  {id:'MusicPlayer',name:'Music SnapTrack',layer:'L5',loc:150,effort:'mechanical',shadow:'none',plan:'no-action',purpose:'Uses MediaPlayerFactory — fully abstracted, no ExoPlayer imports',deps:['MediaPlayerFactory'],file:COMP_MUS+'MusicSnapTrackMediaEngine.kt'},
+  {id:'PreviewPlayer',name:'Preview MediaPlayer',layer:'L5',loc:120,effort:'mechanical',shadow:'none',plan:'no-action',purpose:'Uses MediaPlayerFactory — fully abstracted, no ExoPlayer imports',deps:['MediaPlayerFactory'],file:COMP_PRV+'DefaultPreviewMediaPlayer.kt'},
+  {id:'OperaVideoLayer',name:'Opera VideoLayer',layer:'L5',loc:300,effort:'mechanical',shadow:'none',plan:'no-action',purpose:'Uses MediaPlayerFactory — fully abstracted, no ExoPlayer imports',deps:['MediaPlayerFactory'],file:COMP_OPR+'VideoLayer.kt'},
+  // Ad-hoc consumers (DIRECT ExoPlayer imports — need independent COF flags)
+  {id:'LensesVideoPlayer',name:'Lenses VideoPlayer',layer:'L5',loc:250,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'DIRECT ExoPlayer — custom renderers. COF: lenses_use_media3_video_player',deps:[],file:COMP_LEN+'DefaultVideoPlayerView.kt'},
+  {id:'LensesAudioTrack',name:'Lenses AudioTrack',layer:'L5',loc:180,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'DIRECT ExoPlayer — codec pool. COF: lenses_use_media3_audio_track',deps:[],file:COMP_LM+'ExoPlayerAudioTrackFactory.java'},
+  {id:'LensesVideoStream',name:'Lenses VideoStream',layer:'L5',loc:220,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'DIRECT ExoPlayer — HDR, codec pool. COF: lenses_use_media3_video_stream',deps:[],file:COMP_LM+'ExoPlayerVideoStreamFactory.java'},
+  {id:'SnapDevicesVideo',name:'SnapDevices Video',layer:'L5',loc:160,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'DIRECT ExoPlayer. COF: snap_devices_use_media3_video',deps:[],file:COMP_DEV+'DefaultVideoPlayerView.kt'},
+  {id:'MessagingVoiceNote',name:'Messaging VoiceNote',layer:'L5',loc:200,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'DIRECT ExoPlayer — audio focus. COF: messaging_use_media3_voice_note',deps:[],file:COMP_MSG+'DefaultAudioPlaybackSessionImpl.kt'},
+  {id:'CheeriosPairVideo',name:'Cheerios PairVideo',layer:'L5',loc:80,effort:'mechanical',shadow:'none',plan:'create',purpose:'DIRECT ExoPlayer — simple. No V2_16 shadow. COF: cheerios_use_media3_pair_video',deps:[],file:COMP_CHR+'PairVideoController.kt'},
+  {id:'CheeriosOnboarding',name:'Cheerios Onboarding',layer:'L5',loc:100,effort:'adapt',shadow:'none',plan:'create',purpose:'DIRECT ExoPlayer — custom looper. No V2_16 shadow. COF: cheerios_use_media3_onboarding_video',deps:[],file:COMP_CHD+'CheeriosOnboardingFragment.kt'},
+  {id:'CheeriosCalibration',name:'Cheerios Calibration',layer:'L5',loc:60,effort:'mechanical',shadow:'none',plan:'create',purpose:'DIRECT ExoPlayer — simple. No V2_16 shadow. COF: cheerios_use_media3_calibration_video',deps:[],file:COMP_CHD+'CheeriosCalibrationFragment.kt'},
+  // ══════════════════════════════════════════════════════════════
+  // L4 - AB BOUNDARY (active files)
+  // ══════════════════════════════════════════════════════════════
+  {id:'MediaPlayerFactoryImpl',name:'MediaPlayerFactoryImpl',layer:'L4',loc:300,effort:'adapt',shadow:'none',plan:'create',purpose:'Player factory routing — contains AB logic itself, intentionally unshadowed',deps:['ExoMediaPlayer','ScExoPlayer'],file:PB_PLAYER+'MediaPlayerFactoryImpl.kt'},
+  {id:'PlaybackComponents',name:'PlaybackComponents',layer:'L4',loc:90,effort:'mechanical',shadow:'v2_16',plan:'rename',purpose:'Core playback component container (TrackSelector, LoadControl, etc.)',deps:[],file:PB_API+'PlaybackComponents.kt'},
+  {id:'PlaybackRequest',name:'PlaybackRequest',layer:'L4',loc:70,effort:'mechanical',shadow:'v2_16',plan:'rename',purpose:'Playback request model',deps:[],file:PB_API+'PlaybackRequest.kt'},
+  {id:'MediaPlayerFactory',name:'MediaPlayerFactory',layer:'L4',loc:100,effort:'mechanical',shadow:'v2_16',plan:'rename',purpose:'Player factory interface',deps:[],file:PB_API+'MediaPlayerFactory.kt'},
+  {id:'MediaSourceFactory',name:'MediaSourceFactory',layer:'L4',loc:80,effort:'mechanical',shadow:'v2_16',plan:'rename',purpose:'Media source factory interface',deps:[],file:PB_API+'MediaSourceFactory.kt'},
+  {id:'PlaybackBandwidthMeterFactory',name:'PlaybackBandwidthMeterFactory',layer:'L4',loc:50,effort:'mechanical',shadow:'v2_16',plan:'rename',purpose:'Bandwidth meter factory interface',deps:[],file:PB_API+'PlaybackBandwidthMeterFactory.kt'},
+  {id:'RendererListener',name:'RendererListener',layer:'L4',loc:40,effort:'mechanical',shadow:'v2_16',plan:'rename',purpose:'Renderer event listener interface',deps:[],file:PB_API+'renderer/RendererListener.kt'},
+  {id:'SnapRenderersFactory',name:'SnapRenderersFactory',layer:'L4',loc:100,effort:'mechanical',shadow:'v2_16',plan:'rename',purpose:'Custom renderers factory interface',deps:[],file:PB_API+'renderer/SnapRenderersFactory.kt'},
+  {id:'MediaCodecWarmup',name:'MediaCodecWarmup',layer:'L4',loc:60,effort:'mechanical',shadow:'v2_16',plan:'rename',purpose:'Codec warmup interface',deps:[],file:PB_API+'codecs/MediaCodecWarmup.kt'},
+  {id:'ExoPlaybackExceptionExt',name:'ExoPlaybackExceptionExtensions',layer:'L4',loc:50,effort:'adapt',shadow:'package',plan:'adapt-pkg',purpose:'Extension fns on PlaybackException — package-shadowed in v2_16/',deps:[],file:PB_API+'ExoPlaybackExceptionExtensions.kt'},
+  {id:'PlaybackErrorInfo',name:'PlaybackErrorInfo',layer:'L4',loc:70,effort:'adapt',shadow:'none',plan:'create',purpose:'Error info data class — uses ExoPlayer error codes. No shadow.',deps:[],file:PB_API+'PlaybackErrorInfo.kt'},
+  // ══════════════════════════════════════════════════════════════
+  // L3 - PLAYER CORE (active files)
+  // ══════════════════════════════════════════════════════════════
+  {id:'ExoPlayerBuilder',name:'ExoPlayerBuilder',layer:'L3',loc:79,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'ExoPlayer instance builder',deps:['DefaultSnapRenderersFactory','CacheBasedTrackSelector'],file:PB_PLAYER+'ExoPlayerBuilder.kt',changes:[{step:4,ver:'2.17-2.19',desc:'ExoPlayer.Builder API changes',before:'ExoPlayer.Builder(ctx, renderersFactory)\n  .setTrackSelector(ts)\n  .build()',after:'ExoPlayer.Builder(ctx)\n  .setRenderersFactory(rf)\n  .setTrackSelector(ts)\n  .build()'}]},
+  {id:'DelegateLoadControl',name:'DelegateLoadControl',layer:'L3',loc:128,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Custom LoadControl delegation',deps:[],file:PB_CORE+'DelegateLoadControl.kt',changes:[{step:8,ver:'2.19-M3 1.5',desc:'4 LoadControl signature changes',before:'shouldStartPlayback(\n  bufferedDurationUs, speed, rebuffering)',after:'shouldStartPlayback(\n  LoadingInfo(bufferedDurationUs, speed,\n    lastRebufferRealtimeMs))'}]},
+  {id:'ExoMediaPlayerHelper',name:'ExoMediaPlayerHelper',layer:'L3',loc:258,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Player initialization helper',deps:['DelegateLoadControl','PlaybackBandwidthMeterFactory'],file:PB_CORE+'ExoMediaPlayerHelper.kt'},
+  {id:'MediaSourceManager',name:'MediaSourceManager',layer:'L3',loc:424,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Media source lifecycle management',deps:['SnapMp3Extractor','SnapMatroskaExtractor'],file:PB_PLAYER+'MediaSourceManager.kt',changes:[{step:5,ver:'2.19',desc:'Format.create* → Format.Builder',before:'Format.createVideoSampleFormat(\n  id, mimeType, null, bitrate, ...)',after:'Format.Builder()\n  .setId(id)\n  .setSampleMimeType(mimeType)\n  .setAverageBitrate(bitrate)\n  .build()'}]},
+  {id:'ExoMediaPlayer',name:'ExoMediaPlayer',layer:'L3',loc:1587,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Core ExoPlayer wrapper — implements MediaPlayerInterface',deps:['ExoMediaPlayerHelper','CacheBasedTrackSelector','SnapBandwidthMeter','NetworkManagerDataSource'],file:PB_CORE+'ExoMediaPlayer.kt',changes:[{step:7,ver:'2.18-M3 1.5',desc:'TrackGroupArray → Tracks API',before:'player.currentTrackGroups // TrackGroupArray',after:'player.currentTracks // Tracks'},{step:10,ver:'2.19-M3 1.4',desc:'onSeekProcessed removed',before:'override fun onSeekProcessed() { }',after:'override fun onPositionDiscontinuity(\n  old, new, DISCONTINUITY_REASON_SEEK)'}]},
+  {id:'ScExoPlayer',name:'ScExoPlayer',layer:'L3',loc:1649,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Behavior hub — task execution, analytics, renderer coordination',deps:['ExoMediaPlayer','CacheBasedTrackSelector','DelegateLoadControl'],file:PB_PLAYER+'ScExoPlayer.kt',changes:[{step:7,ver:'2.18-M3 1.5',desc:'TrackSelectionArray removed',before:'onTracksChanged(\n  trackGroups: TrackGroupArray,\n  trackSelections: TrackSelectionArray)',after:'onTracksChanged(tracks: Tracks)'},{step:9,ver:'2.19-M3 1.4',desc:'Renderer changes',before:'Buffer.isDecodeOnly()',after:'Compare buffer.timeUs with\ngetLastResetPositionUs()'}]},
+  {id:'StubAudioManager',name:'StubAudioManager',layer:'L3',loc:40,effort:'adapt',shadow:'none',plan:'create',purpose:'Prevents ExoPlayer AudioManager ANRs — intentionally unshadowed, patched in shadow script',deps:[],file:PB_CORE+'StubAudioManager.kt'},
+  {id:'PlaybackErrorUtils',name:'PlaybackErrorUtils',layer:'L3',loc:80,effort:'adapt',shadow:'package',plan:'adapt-pkg',purpose:'Error mapping utils — package-shadowed in v2_16/',deps:[],file:PB_CORE+'util/PlaybackErrorUtils.kt'},
+  // L2 - Renderer Factory
+  {id:'DefaultSnapRenderersFactory',name:'DefaultSnapRenderersFactory',layer:'L2',loc:168,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Creates video/audio/text renderers for Snap playback',deps:['SnapMediaCodecVideoRenderer','SnapMediaCodecAdapterFactory'],file:PB_RENDER+'factory/DefaultSnapRenderersFactory.kt',changes:[{step:4,ver:'2.17-2.19',desc:'Multi-arg constructor → Builder',before:'DefaultRenderersFactory(ctx, mode)',after:'DefaultRenderersFactory(ctx)\n  .setExtensionRendererMode(mode)'}]},
+  {id:'ScRenderersFactory',name:'ScRenderersFactory',layer:'L2',loc:240,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Snap renderers factory abstraction',deps:[],file:PB_RENDER+'factory/ScRenderersFactory.kt'},
+  {id:'RendererConfiguration',name:'RendererConfiguration',layer:'L2',loc:37,effort:'mechanical',shadow:'v2_16',plan:'rename',purpose:'Renderer config holder',deps:[],file:PB_RENDER+'RendererConfiguration.kt'},
+  {id:'RendererEventDispatcher',name:'RendererEventDispatcher',layer:'L2',loc:127,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Dispatches renderer events',deps:[],file:PB_RENDER+'RendererEventDispatcher.kt'},
+  {id:'ScBaseRenderer',name:'ScBaseRenderer',layer:'L2',loc:258,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Base renderer with codec state machine',deps:[],file:PB_RENDER+'ScBaseRenderer.kt',changes:[{step:9,ver:'M3 1.4',desc:'Buffer.isDecodeOnly() removed',before:'if (buffer.isDecodeOnly()) skip()',after:'if (buffer.timeUs < getLastResetPositionUs())\n  skip()'}]},
+  // L2 - Video
+  {id:'ScVideoRenderer',name:'ScVideoRenderer',layer:'L2',loc:479,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Custom video rendering pipeline',deps:['ScBaseRenderer','VideoComponent'],file:PB_RENDER+'ScVideoRenderer.kt'},
+  {id:'VideoComponent',name:'VideoComponent',layer:'L2',loc:145,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Video component abstraction',deps:['VideoDecoder'],file:PB_RENDER+'component/video/VideoComponent.kt'},
+  {id:'VideoDecoder',name:'VideoDecoder',layer:'L2',loc:351,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Video codec decoding',deps:[],file:PB_RENDER+'component/video/VideoDecoder.kt'},
+  {id:'GlVideoComponent',name:'GlVideoComponent',layer:'L2',loc:1516,effort:'rewrite',shadow:'v2_16',plan:'rename',purpose:'OpenGL video rendering pipeline (LARGEST)',deps:['VideoDecoder','UnifiedOpenGLVideoComponent'],file:PB_RENDER+'component/video/GlVideoComponent.kt'},
+  {id:'UnifiedOpenGLVideoComponent',name:'UnifiedOpenGLVideoComponent',layer:'L2',loc:346,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Unified GL renderer abstraction',deps:[],file:PB_RENDER+'component/video/UnifiedOpenGLVideoComponent.kt'},
+  {id:'SnapMediaCodecVideoRenderer',name:'SnapMediaCodecVideoRenderer',layer:'L2',loc:61,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'MediaCodec video renderer wrapper',deps:[],file:PB_RENDER+'SnapMediaCodecVideoRenderer.kt'},
+  {id:'ScImageRenderer',name:'ScImageRenderer',layer:'L2',loc:1086,effort:'rewrite',shadow:'v2_16',plan:'rename',purpose:'Image/still frame renderer with GL',deps:['ScUnifiedOpenGLImageRenderer'],file:PB_RENDER+'ScImageRenderer.kt'},
+  {id:'ScUnifiedOpenGLImageRenderer',name:'ScUnifiedOpenGLImageRenderer',layer:'L2',loc:292,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'GL image renderer',deps:[],file:PB_RENDER+'ScUnifiedOpenGLImageRenderer.kt'},
+  // L2 - Audio
+  {id:'ScAudioRenderer',name:'ScAudioRenderer',layer:'L2',loc:534,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Custom audio renderer',deps:['AudioComponent','ScBaseRenderer'],file:PB_RENDER+'ScAudioRenderer.kt'},
+  {id:'ScAudioRendererV2',name:'ScAudioRendererV2',layer:'L2',loc:637,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Enhanced audio renderer variant',deps:['AudioComponent'],file:PB_RENDER+'ScAudioRendererV2.kt'},
+  {id:'ScAudioSink',name:'ScAudioSink',layer:'L2',loc:696,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Custom audio sink with volume normalization',deps:['VolumeNormalizationProcessor','AudioPlayer'],file:PB_RENDER+'component/audio/ScAudioSink.kt',changes:[{step:4,ver:'2.17-2.19',desc:'DefaultAudioSink constructor → Builder',before:'DefaultAudioSink(capabilities, processors)',after:'DefaultAudioSink.Builder(context)\n  .setAudioProcessors(processors)\n  .build()'}]},
+  {id:'AudioComponent',name:'AudioComponent',layer:'L2',loc:369,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Audio pipeline component',deps:['AudioDecoder','AudioPlayer','ScAudioSink'],file:PB_RENDER+'component/audio/AudioComponent.kt'},
+  {id:'AudioDecoder',name:'AudioDecoder',layer:'L2',loc:203,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Audio codec decoding',deps:[],file:PB_RENDER+'component/audio/AudioDecoder.kt'},
+  {id:'AudioPlayer',name:'AudioPlayer',layer:'L2',loc:382,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Audio playback management',deps:['ScAudioSink'],file:PB_RENDER+'component/audio/AudioPlayer.kt'},
+  {id:'VolumeNormalizationProcessor',name:'VolumeNormalizationProcessor',layer:'L2',loc:155,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Audio volume normalization processor',deps:[],file:PB_CORE+'audioprocessor/VolumeNormalizationProcessor.kt'},
+  // L2 - Audio (GAP — no shadow)
+  {id:'SnapMediaCodecAudioRenderer',name:'SnapMediaCodecAudioRenderer',layer:'L2',loc:120,effort:'adapt',shadow:'none',plan:'create',purpose:'MediaCodec audio renderer — NO V2_16 shadow exists. GAP.',deps:['ScBaseRenderer'],file:PB_RENDER+'SnapMediaCodecAudioRenderer.kt'},
+  // L2 - Renderer helpers (GAP — package-shadowed)
+  {id:'DefaultSnapRenderersFactoryExt',name:'DefaultSnapRenderersFactoryExtensions',layer:'L2',loc:60,effort:'adapt',shadow:'package',plan:'adapt-pkg',purpose:'Extension fns on renderers factory — package-shadowed in v2_16/',deps:[],file:PB_CORE+'util/DefaultSnapRenderersFactoryExtensions.kt'},
+  {id:'PlaybackInfo',name:'PlaybackInfo',layer:'L2',loc:50,effort:'adapt',shadow:'none',plan:'create',purpose:'Playback info data class — no shadow. GAP.',deps:[],file:PB_RENDER+'PlaybackInfo.kt'},
+  // L2 - Codecs
+  {id:'AsyncMediaCodecAdaptorFactory',name:'AsyncMediaCodecAdaptorFactory',layer:'L2',loc:162,effort:'rewrite',shadow:'v2_16',plan:'rename',purpose:'FORK-ONLY: Async codec adapter factory (must rewrite ~200 LOC)',deps:[],file:PB_CODEC+'factory/AsyncMediaCodecAdaptorFactory.kt',changes:[{step:11,ver:'Fork',desc:'Multi-arg constructor NOT in Media3',before:'AsynchronousMediaCodecAdapter.Factory(\n  trackType, syncFlags, immediateFlush)',after:'// Must implement MediaCodecAdapter.Factory\n// from scratch with MediaCodec.setCallback()\n// + HandlerThread (~200 LOC)'}]},
+  {id:'SyncMediaCodecAdaptorFactory',name:'SyncMediaCodecAdaptorFactory',layer:'L2',loc:233,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Sync codec adapter factory',deps:[],file:PB_CODEC+'factory/SyncMediaCodecAdaptorFactory.kt'},
+  {id:'SnapMediaCodecAdapterFactory',name:'SnapMediaCodecAdapterFactory',layer:'L2',loc:71,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Dispatcher for sync/async codec factories',deps:['AsyncMediaCodecAdaptorFactory','SyncMediaCodecAdaptorFactory'],file:PB_CODEC+'factory/SnapMediaCodecAdapterFactory.kt'},
+  {id:'SnapMediaCodecSelector',name:'SnapMediaCodecSelector',layer:'L2',loc:57,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Custom codec selection',deps:['CodecSelectionPolicy'],file:PB_CODEC+'SnapMediaCodecSelector.kt'},
+  {id:'CodecSelectionPolicy',name:'CodecSelectionPolicy',layer:'L2',loc:64,effort:'mechanical',shadow:'v2_16',plan:'rename',purpose:'Codec selection policy interface',deps:[],file:PB_CODEC+'CodecSelectionPolicy.kt'},
+  {id:'MediaCodecWarmupImpl',name:'MediaCodecWarmupImpl',layer:'L2',loc:177,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Codec warmup implementation',deps:[],file:PB_CODEC+'MediaCodecWarmupImpl.kt'},
+  // L2 - Track Selection
+  {id:'CacheBasedTrackSelector',name:'CacheBasedTrackSelector',layer:'L2',loc:137,effort:'rewrite',shadow:'v2_16',plan:'rename',purpose:'FORK-ONLY: Track selector considering cache state (TrackGroupArray removed)',deps:[],file:PB_CORE+'trackselection/CacheBasedTrackSelector.kt',changes:[{step:7,ver:'2.18-M3 1.5',desc:'TrackGroupArray removed → Tracks API',before:'override fun selectTracks(\n  caps: Array<RendererCapabilities>,\n  trackGroups: TrackGroupArray,\n  periodId: MediaPeriodId,\n  timeline: Timeline\n): TrackSelectorResult',after:'// TrackGroupArray completely removed in M3 1.5\n// Must rewrite to use Tracks.getGroups()\n// and TrackSelectionOverride API'}]},
+  {id:'CacheBasedAdaptiveTrackSelection',name:'CacheBasedAdaptiveTrackSelection',layer:'L2',loc:157,effort:'rewrite',shadow:'v2_16',plan:'rename',purpose:'FORK-ONLY: Cache-aware adaptive bitrate (updateSelectedIndex fork-only)',deps:[],file:PB_CORE+'trackselection/CacheBasedAdaptiveTrackSelection.kt',changes:[{step:7,ver:'Fork',desc:'updateSelectedIndex() is fork-only',before:'override fun updateSelectedIndex(\n  playbackPositionUs, bufferedDurationUs,\n  availableTimeUs, queue)',after:'// Must implement own updateSelectedTrack()\n// ~100 LOC with full ABR logic'}]},
+  {id:'ScTrackSelector',name:'ScTrackSelector',layer:'L2',loc:135,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Snap track selector wrapper',deps:[],file:PB_CORE+'trackselection/ScTrackSelector.java'},
+  // L2 - Bandwidth
+  {id:'SnapBandwidthMeter',name:'SnapBandwidthMeter',layer:'L2',loc:154,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Custom bandwidth estimation',deps:[],file:PB_BW+'SnapBandwidthMeter.kt',changes:[{step:4,ver:'2.17-2.19',desc:'DefaultBandwidthMeter constructor → Builder',before:'DefaultBandwidthMeter(context)',after:'DefaultBandwidthMeter.Builder(context).build()'}]},
+  {id:'DelegatingBandwidthMeter',name:'DelegatingBandwidthMeter',layer:'L2',loc:100,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Bandwidth meter delegation',deps:['SnapBandwidthMeter'],file:PB_SHARED+'DelegatingBandwidthMeter.kt'},
+  // L1 - DataSources
+  {id:'NetworkManagerDataSource',name:'NetworkManagerDataSource',layer:'L1',loc:296,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Snap network manager data source',deps:[],file:PB_CORE+'NetworkManagerDataSource.kt',changes:[{step:6,ver:'M3 1.4',desc:'DataSpec constructor → Builder',before:'DataSpec(uri, position, length, key)',after:'DataSpec.Builder()\n  .setUri(uri).setPosition(position)\n  .setLength(length).setKey(key).build()'}]},
+  {id:'EncryptedDataSource',name:'EncryptedDataSource',layer:'L1',loc:148,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Encrypted content data source',deps:[],file:PB_CORE+'EncryptedDataSource.kt'},
+  {id:'PrefetchAwareDataSource',name:'PrefetchAwareDataSource',layer:'L1',loc:189,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Prefetch-optimized data source',deps:[],file:PB_CORE+'PrefetchAwareDataSource.kt'},
+  {id:'NativeContentManagerDataSource',name:'NativeContentManagerDataSource',layer:'L1',loc:436,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Native content manager data source (largest DS)',deps:[],file:PB_CORE+'streaming/NativeContentManagerDataSource.kt'},
+  {id:'SnapDefaultDataSource',name:'SnapDefaultDataSource',layer:'L1',loc:73,effort:'mechanical',shadow:'v2_16',plan:'rename',purpose:'Default data source with Snap customizations',deps:[],file:PB_CORE+'SnapDefaultDataSource.kt'},
+  // L1 - Cache
+  {id:'ExoCacheProvider',name:'ExoCacheProvider',layer:'L1',loc:99,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'SimpleCache provider',deps:[],file:PB_CACHE+'ExoCacheProvider.kt',changes:[{step:4,ver:'2.19',desc:'SimpleCache 2-arg → 3-arg',before:'SimpleCache(dir, evictor)',after:'SimpleCache(dir, evictor,\n  StandaloneDatabaseProvider(ctx))'}]},
+  {id:'SimpleCacheStreamingContentManager',name:'SimpleCacheStreamingContentManager',layer:'L1',loc:557,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Main streaming cache manager',deps:['ExoCacheProvider'],file:OPERA_NET+'SimpleCacheStreamingContentManager.kt'},
+  {id:'SimpleCacheEntry',name:'SimpleCacheEntry',layer:'L1',loc:488,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Individual cached content entry',deps:[],file:OPERA_NET+'SimpleCacheEntry.kt'},
+  // L1 - Media Sources
+  {id:'DefaultSnapStreamingMediaSourceFactory',name:'DefaultSnapStreamingMediaSourceFactory',layer:'L1',loc:63,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'DASH media source factory',deps:['ScDashChunkSource'],file:PB_CORE+'streaming/DefaultSnapStreamingMediaSourceFactory.kt'},
+  {id:'ScDashChunkSource',name:'ScDashChunkSource',layer:'L1',loc:112,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Custom DASH chunk source',deps:[],file:PB_CORE+'streaming/ScDashChunkSource.kt'},
+  {id:'BoltUseCaseDashManifestParserImpl',name:'BoltUseCaseDashManifestParserImpl',layer:'L1',loc:117,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'DASH manifest parser for Bolt',deps:[],file:PB_CORE+'BoltUseCaseDashManifestParserImpl.kt'},
+  // L1 - Extractors
+  {id:'SnapMp3Extractor',name:'SnapMp3Extractor',layer:'L1',loc:28,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Custom MP3 extractor',deps:[],file:PB_CORE+'SnapMp3Extractor.kt'},
+  {id:'SnapMatroskaExtractor',name:'SnapMatroskaExtractor',layer:'L1',loc:25,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Custom Matroska extractor',deps:[],file:PB_CORE+'SnapMatroskaExtractor.kt'},
+  // L1 - Opera (GAP — no shadow)
+  {id:'CodecPreConfigurePlugin',name:'CodecPreConfigurePlugin',layer:'L1',loc:150,effort:'adapt',shadow:'none',plan:'create',purpose:'Codec pre-configure for Opera — DIRECT ExoPlayer. No shadow. GAP.',deps:['CodecPoolImpl'],file:'android/snapchat/platform/opera/warmup/core/src/main/java/com/snap/opera/warmup/CodecPreConfigurePlugin.kt'},
+  {id:'CodecPreConfigurator',name:'CodecPreConfigurator',layer:'L1',loc:100,effort:'adapt',shadow:'none',plan:'create',purpose:'Codec pre-configurator utility — No shadow. GAP.',deps:['CodecPreConfigurePlugin'],file:'android/snapchat/platform/opera/warmup/core/src/main/java/com/snap/opera/warmup/CodecPreConfigurator.kt'},
+  {id:'NetworkRequestExt',name:'NetworkRequestExtensions',layer:'L1',loc:80,effort:'adapt',shadow:'package',plan:'adapt-pkg',purpose:'Network request extensions — package-shadowed in v2_16/',deps:[],file:OPERA_NET+'NetworkRequestExtensions.kt'},
+  {id:'StreamingChunkSizeCalc',name:'StreamingChunkSizeLimitCalc',layer:'L1',loc:60,effort:'adapt',shadow:'none',plan:'create',purpose:'Chunk size calculator — No shadow. GAP.',deps:[],file:OPERA_NET+'StreamingChunkSizeLimitCalculator.kt'},
+  // L1 - Media Engine Extensions (GAP — package-shadowed)
+  {id:'ExoFormatExtensions',name:'ExoFormatExtensions',layer:'L1',loc:100,effort:'adapt',shadow:'package',plan:'adapt-pkg',purpose:'Format conversion extensions — package-shadowed in v2_16/',deps:[],file:ME_API+'extensions/ExoFormatExtensions.kt'},
+  {id:'MediaFormatExtensions',name:'MediaFormatExtensions',layer:'L1',loc:80,effort:'adapt',shadow:'package',plan:'adapt-pkg',purpose:'MediaFormat extensions — package-shadowed in v2_16/',deps:[],file:ME_API+'extensions/MediaFormatExtensions.kt'},
+  {id:'ExoMediaCodecRenderHelper',name:'ExoMediaCodecRenderHelper',layer:'L1',loc:120,effort:'adapt',shadow:'package',plan:'adapt-pkg',purpose:'Codec render helper — package-shadowed in v2_16/',deps:[],file:ME_BASE+'player/renderer/ExoMediaCodecRenderHelper.kt'},
+  // L1 - Media Engine (GAP — no shadow)
+  {id:'MixedAudioSource',name:'MixedAudioSource',layer:'L1',loc:100,effort:'adapt',shadow:'none',plan:'create',purpose:'Mixed audio source — No shadow. GAP.',deps:[],file:ME_BASE+'MixedAudioSource.kt'},
+  {id:'PassThroughAudioDataSource',name:'PassThroughAudioDataSource',layer:'L1',loc:80,effort:'adapt',shadow:'none',plan:'create',purpose:'Pass-through audio data source — No shadow. GAP.',deps:[],file:ME_BASE+'PassThroughAudioDataSource.kt'},
+  // L1 - Media Engine Codecs
+  {id:'CodecImpl',name:'Codec (Java)',layer:'L1',loc:1238,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Core codec wrapper (largest ME file)',deps:[],file:ME_CODEC+'Codec.java'},
+  {id:'CodecPoolImpl',name:'CodecPoolImpl',layer:'L1',loc:340,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Reusable codec instance pool',deps:['CodecImpl'],file:ME_CODEC+'CodecPoolImpl.kt'},
+  {id:'CodecPreloaderImpl',name:'CodecPreloaderImpl',layer:'L1',loc:332,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Codec preloading for faster startup',deps:['CodecPoolImpl'],file:ME_CODEC+'CodecPreloaderImpl.kt'},
+  // L1 - Media Engine Extractors
+  {id:'ExoExtractor',name:'ExoExtractor',layer:'L1',loc:299,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'ExoPlayer extractor wrapper',deps:[],file:ME_EXT+'ExoExtractor.kt'},
+  {id:'ExoMediaFormatConverter',name:'ExoMediaFormatConverter',layer:'L1',loc:115,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'ExoPlayer Format ↔ MediaFormat converter',deps:[],file:ME_EXT+'ExoMediaFormatConverter.kt',changes:[{step:5,ver:'2.19',desc:'Format API rewrite',before:'Format.createVideoSampleFormat(...)',after:'Format.Builder().setSampleMimeType(...).build()'}]},
+  // L0 - Decoders
+  {id:'Dav1dSoftwareDecoderInstaller',name:'Dav1dSoftwareDecoderInstaller',layer:'L0',loc:70,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'AV1 dav1d decoder installer (fork constructor)',deps:[],file:DEC_AV1+'Dav1dSoftwareDecoderInstaller.kt'},
+  {id:'BaseSoftwareDecoderInstaller',name:'BaseSoftwareDecoderInstaller',layer:'L0',loc:268,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Base software decoder installer',deps:[],file:DEC_CORE+'BaseSoftwareDecoderInstaller.kt'},
+  {id:'DynamicSoftwareDecoderInstaller',name:'DynamicSoftwareDecoderInstaller',layer:'L0',loc:229,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Dynamic decoder loading from features',deps:['BaseSoftwareDecoderInstaller'],file:DEC_CORE+'DynamicSoftwareDecoderInstaller.kt'},
+  // L0 - Listeners
+  {id:'PlayerAnalyticsListener',name:'PlayerAnalyticsListener',layer:'L0',loc:114,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Analytics event listener',deps:[],file:PB_ANAL+'PlayerAnalyticsListener.kt',changes:[{step:10,ver:'M3 1.0',desc:'Generic decoder callbacks → specific',before:'onDecoderEnabled(decoderCounters)',after:'onAudioEnabled(decoderCounters)\nonVideoEnabled(decoderCounters)'}]},
+  {id:'VideoPlayerHelper',name:'VideoPlayerHelper',layer:'L0',loc:1146,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'High-level video player helper (large)',deps:['ExoMediaPlayer'],file:PB_CORE+'VideoPlayerHelper.kt'},
+  {id:'PlayerErrorHandler',name:'PlayerErrorHandler',layer:'L0',loc:159,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Playback error handling',deps:[],file:PB_PLAYER+'PlayerErrorHandler.kt'},
+  {id:'MediaSourceEventListenerImpl',name:'MediaSourceEventListenerImpl',layer:'L0',loc:218,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Media source event listener',deps:[],file:PB_CORE+'MediaSourceEventListenerImpl.kt'},
+  {id:'ScAudioResampler',name:'ScAudioResampler',layer:'L0',loc:133,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'Audio resampling processor',deps:[],file:ME_AUDIO+'ScAudioResampler.kt'},
+  {id:'ScExternalMediaClock',name:'ScExternalMediaClock',layer:'L0',loc:132,effort:'adapt',shadow:'v2_16',plan:'rename',purpose:'External clock for playback sync',deps:[],file:ME_PLR+'clock/ScExternalMediaClock.kt'},
+];
+
+// ── Graph Layout & Rendering ──
+const NODE_W = 180, NODE_H = 44, H_GAP = 24, ROW_GAP = 16;
+const effortColor = {mechanical:'#3fb950',adapt:'#d29922',rewrite:'#f85149',create:'#58a6ff'};
+let pan = {x:60,y:60}, zoom = 0.55, dragging = false, dragStart = {x:0,y:0}, panStart = {x:0,y:0};
+let selectedNode = null;
+
+// Subcategory grouping within L2 and L1 for visual clarity
+const L2_GROUPS = [
+  {label:'Renderer Factory',ids:['DefaultSnapRenderersFactory','ScRenderersFactory','RendererConfiguration','RendererEventDispatcher','ScBaseRenderer']},
+  {label:'Video',ids:['ScVideoRenderer','VideoComponent','VideoDecoder','GlVideoComponent','UnifiedOpenGLVideoComponent','SnapMediaCodecVideoRenderer','ScImageRenderer','ScUnifiedOpenGLImageRenderer']},
+  {label:'Audio',ids:['ScAudioRenderer','ScAudioRendererV2','ScAudioSink','AudioComponent','AudioDecoder','AudioPlayer','VolumeNormalizationProcessor']},
+  {label:'Codecs',ids:['AsyncMediaCodecAdaptorFactory','SyncMediaCodecAdaptorFactory','SnapMediaCodecAdapterFactory','SnapMediaCodecSelector','CodecSelectionPolicy','MediaCodecWarmupImpl']},
+  {label:'Track Selection',ids:['CacheBasedTrackSelector','CacheBasedAdaptiveTrackSelection','ScTrackSelector']},
+  {label:'Bandwidth',ids:['SnapBandwidthMeter','DelegatingBandwidthMeter']},
+];
+
+// Layout nodes with proper spacing per layer, subcategory grouping
+function layoutNodes() {
+  const byLayer = {};
+  C.forEach(c => { if(!byLayer[c.layer]) byLayer[c.layer]=[];byLayer[c.layer].push(c); });
+
+  let currentY = 0;
+
+  LAYERS.forEach((L) => {
+    const nodes = byLayer[L.id] || [];
+    if (!nodes.length) return;
+
+    // For L2, use subcategory groups with extra spacing
+    if (L.id === 'L2') {
+      let groupX = 0;
+      const groupedIds = new Set();
+      L2_GROUPS.forEach(grp => {
+        const grpNodes = grp.ids.map(id => nodes.find(n=>n.id===id)).filter(Boolean);
+        grp.ids.forEach(id => groupedIds.add(id));
+        const cols = Math.min(grpNodes.length, 4);
+        grpNodes.forEach((n,i) => {
+          n.x = groupX + (i % cols) * (NODE_W + H_GAP);
+          n.y = currentY + Math.floor(i / cols) * (NODE_H + ROW_GAP);
+        });
+        groupX += cols * (NODE_W + H_GAP) + 40;
+      });
+      // Layout ungrouped L2 nodes (gaps, new additions)
+      const ungrouped = nodes.filter(n => !groupedIds.has(n.id));
+      if (ungrouped.length) {
+        const cols = Math.min(ungrouped.length, 4);
+        ungrouped.forEach((n,i) => {
+          n.x = groupX + (i % cols) * (NODE_W + H_GAP);
+          n.y = currentY + Math.floor(i / cols) * (NODE_H + ROW_GAP);
+        });
+      }
+      const validYs = nodes.filter(n => n.y != null).map(n => n.y);
+      const maxRow = validYs.length ? Math.max(...validYs) - currentY : 0;
+      currentY += maxRow + NODE_H + 80;
+    } else {
+      // Standard grid layout with generous spacing
+      const maxCols = L.id === 'L4' ? 8 : L.id === 'L3' ? 6 : 8;
+      const cols = Math.min(nodes.length, maxCols);
+      nodes.forEach((n,i) => {
+        n.x = (i % cols) * (NODE_W + H_GAP);
+        n.y = currentY + Math.floor(i / cols) * (NODE_H + ROW_GAP);
+      });
+      const maxRow = nodes.length > 0 ? Math.max(...nodes.map(n => n.y)) - currentY : 0;
+      currentY += maxRow + NODE_H + 80;
+    }
+  });
+}
+
+function render() {
+  const world = document.getElementById('graph-world');
+  world.innerHTML = '';
+  world.setAttribute('transform', `translate(${pan.x},${pan.y}) scale(${zoom})`);
+
+  // Layer backgrounds & labels
+  LAYERS.forEach((L) => {
+    const nodes = C.filter(c => c.layer === L.id && c.x != null && c.y != null);
+    if (!nodes.length) return;
+    const minY = Math.min(...nodes.map(n=>n.y)) - 36;
+    const maxY = Math.max(...nodes.map(n=>n.y)) + NODE_H + 16;
+    const minX = Math.min(...nodes.map(n=>n.x)) - 10;
+    const maxX = Math.max(...nodes.map(n=>n.x)) + NODE_W + 10;
+    // Layer label - positioned above the group
+    const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    txt.setAttribute('x', minX + 4); txt.setAttribute('y', minY + 14);
+    txt.setAttribute('fill', L.color);
+    txt.setAttribute('font-size','12');txt.setAttribute('font-weight','700');
+    txt.setAttribute('font-family','-apple-system,sans-serif');
+    txt.setAttribute('opacity','0.7');
+    txt.textContent = L.name;
+    world.appendChild(txt);
+    // Layer bg rect
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x', minX);rect.setAttribute('y', minY);
+    rect.setAttribute('width', maxX - minX);rect.setAttribute('height', maxY - minY);
+    rect.setAttribute('rx','10');rect.setAttribute('fill','rgba(255,255,255,0.015)');
+    rect.setAttribute('stroke', L.color);rect.setAttribute('stroke-opacity','0.15');
+    rect.setAttribute('stroke-width','1');
+    world.appendChild(rect);
+  });
+
+  // L2 subcategory labels
+  if (typeof L2_GROUPS !== 'undefined') {
+    L2_GROUPS.forEach(grp => {
+      const grpNodes = C.filter(n => grp.ids.includes(n.id));
+      if (!grpNodes.length) return;
+      const minX = Math.min(...grpNodes.map(n=>n.x));
+      const minY = Math.min(...grpNodes.map(n=>n.y));
+      const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+      txt.setAttribute('x', minX); txt.setAttribute('y', minY - 6);
+      txt.setAttribute('fill','rgba(139,148,158,0.5)');
+      txt.setAttribute('font-size','9');txt.setAttribute('font-weight','600');
+      txt.setAttribute('font-family','-apple-system,sans-serif');
+      txt.setAttribute('letter-spacing','0.05em');
+      txt.textContent = grp.label.toUpperCase();
+      world.appendChild(txt);
+    });
+  }
+
+  // Edges — smart routing based on relative positions
+  const edgeGroup = document.createElementNS('http://www.w3.org/2000/svg','g');
+  C.forEach(c => {
+    (c.deps||[]).forEach((depId,di) => {
+      const dep = C.find(d => d.id === depId);
+      if (!dep || c.x == null || c.y == null || dep.x == null || dep.y == null) return;
+
+      // Source and target centers
+      const sx = c.x + NODE_W/2, sy = c.y + NODE_H/2;
+      const tx = dep.x + NODE_W/2, ty = dep.y + NODE_H/2;
+      const dx = tx - sx, dy = ty - sy;
+
+      let x1,y1,x2,y2,d;
+      // Per-edge offset to separate overlapping edges
+      const edgeOffset = (di - (c.deps.length-1)/2) * 6;
+
+      if (Math.abs(dy) < NODE_H + ROW_GAP) {
+        // Same row / close vertically → connect side-to-side
+        if (dx > 0) {
+          x1 = c.x + NODE_W; y1 = sy + edgeOffset;
+          x2 = dep.x;        y2 = ty + edgeOffset;
+        } else {
+          x1 = c.x;          y1 = sy + edgeOffset;
+          x2 = dep.x + NODE_W; y2 = ty + edgeOffset;
+        }
+        const cpx = Math.abs(dx) * 0.35;
+        d = `M${x1},${y1} C${x1+(dx>0?cpx:-cpx)},${y1} ${x2-(dx>0?cpx:-cpx)},${y2} ${x2},${y2}`;
+      } else {
+        // Different rows → connect bottom-to-top (or top-to-bottom)
+        if (dy > 0) {
+          // Dep is below source
+          x1 = sx + edgeOffset; y1 = c.y + NODE_H;
+          x2 = tx + edgeOffset; y2 = dep.y;
+        } else {
+          // Dep is above source
+          x1 = sx + edgeOffset; y1 = c.y;
+          x2 = tx + edgeOffset; y2 = dep.y + NODE_H;
+        }
+        const cpy = Math.abs(y2-y1) * 0.4;
+        d = `M${x1},${y1} C${x1},${y1+(dy>0?cpy:-cpy)} ${x2},${y2-(dy>0?cpy:-cpy)} ${x2},${y2}`;
+      }
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg','path');
+      line.setAttribute('d', d);
+      line.setAttribute('fill','none');
+      line.setAttribute('stroke','rgba(88,166,255,0.18)');
+      line.setAttribute('stroke-width','1.5');
+      line.setAttribute('marker-end','url(#arrow)');
+      line.style.transition = 'stroke 0.15s, stroke-width 0.15s';
+      line.addEventListener('mouseenter', () => {line.setAttribute('stroke','rgba(88,166,255,0.7)');line.setAttribute('stroke-width','2.5');});
+      line.addEventListener('mouseleave', () => {line.setAttribute('stroke','rgba(88,166,255,0.18)');line.setAttribute('stroke-width','1.5');});
+      edgeGroup.appendChild(line);
+    });
+  });
+  world.appendChild(edgeGroup);
+
+  // Nodes
+  C.forEach(c => {
+    if (c.x == null || c.y == null) return; // skip unpositioned nodes
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('transform',`translate(${c.x},${c.y})`);
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', (e) => { if(!didDrag){e.stopPropagation(); openSidePanel(c.id);} });
+
+    // Color: plan-based for border, effort-based for side bar
+    const planColor = c.plan==='no-action' ? '#8b949e' : c.plan==='create' ? '#f85149' : c.plan==='adapt-pkg' ? '#56d4dd' : effortColor[c.effort] || '#8b949e';
+    const color = planColor;
+    const isSelected = selectedNode === c.id;
+
+    // Node bg
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('width', NODE_W); rect.setAttribute('height', NODE_H);
+    rect.setAttribute('rx','6');
+    rect.setAttribute('fill', isSelected ? 'rgba(88,166,255,0.1)' : '#161b22');
+    rect.setAttribute('stroke', isSelected ? '#58a6ff' : color);
+    rect.setAttribute('stroke-width', isSelected ? '2' : '1');
+    g.appendChild(rect);
+
+    // Effort indicator bar
+    const bar = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    bar.setAttribute('x','0');bar.setAttribute('y','0');
+    bar.setAttribute('width','4');bar.setAttribute('height',NODE_H);
+    bar.setAttribute('rx','6 0 0 6');bar.setAttribute('fill',color);
+    g.appendChild(bar);
+
+    // Tooltip
+    const title = document.createElementNS('http://www.w3.org/2000/svg','title');
+    title.textContent = `${c.name}\n${c.purpose}\n${c.loc} LOC · ${c.effort} · shadow:${c.shadow} · plan:${c.plan}`;
+    g.appendChild(title);
+
+    // Name
+    const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    txt.setAttribute('x','12');txt.setAttribute('y','18');
+    txt.setAttribute('fill','#e6edf3');txt.setAttribute('font-size','11');
+    txt.setAttribute('font-weight','600');txt.setAttribute('font-family','-apple-system,sans-serif');
+    const maxChars = Math.floor((NODE_W - 20) / 6.5);
+    const displayName = c.name.length > maxChars ? c.name.substring(0, maxChars-1) + '…' : c.name;
+    txt.textContent = displayName;
+    g.appendChild(txt);
+
+    // LOC + Source badge
+    const info = document.createElementNS('http://www.w3.org/2000/svg','text');
+    info.setAttribute('x','12');info.setAttribute('y','34');
+    info.setAttribute('fill','#8b949e');info.setAttribute('font-size','9');
+    info.setAttribute('font-family','SF Mono,monospace');
+    const shadowIcon = c.shadow==='v2_16' ? '✓V2_16' : c.shadow==='package' ? '✓PKG' : '✗';
+    const planLabel = c.plan==='rename' ? 'RENAME' : c.plan==='adapt-pkg' ? 'ADAPT' : c.plan==='create' ? 'CREATE' : '—';
+    info.textContent = `${c.loc}L · ${shadowIcon} · ${planLabel}`;
+    g.appendChild(info);
+
+    world.appendChild(g);
+  });
+
+  updateStats();
+  renderMinimap();
+}
+
+function updateStats() {
+  const mech = C.filter(c=>c.effort==='mechanical').length;
+  const adapt = C.filter(c=>c.effort==='adapt').length;
+  const rewrite = C.filter(c=>c.effort==='rewrite').length;
+  const totalLoc = C.reduce((s,c)=>s+c.loc,0);
+  document.getElementById('graph-stats').innerHTML =
+    `${C.length} components · ${totalLoc.toLocaleString()} LOC · <span style="color:var(--g)">${mech} mechanical</span> · <span style="color:var(--y)">${adapt} adapt</span> · <span style="color:var(--r)">${rewrite} rewrite</span>`;
+}
+
+// ── Side Panel ──
+function openSidePanel(id) {
+  selectedNode = id;
+  const c = C.find(n=>n.id===id);
+  if(!c) return;
+  const panel = document.getElementById('side-panel');
+  const content = document.getElementById('sp-content');
+
+  const effortLabel = c.effort.charAt(0).toUpperCase()+c.effort.slice(1);
+  const effortClass = c.effort === 'adapt' ? 'adapt' : c.effort;
+  const depsHtml = (c.deps||[]).map(d =>
+    `<div class="sp-dep" onclick="openSidePanel('${d}')">${d}</div>`
+  ).join('') || '<div style="color:var(--td);font-size:11px">None</div>';
+  const dependents = C.filter(n=>(n.deps||[]).includes(id));
+  const depsOfHtml = dependents.map(d =>
+    `<div class="sp-dep" onclick="openSidePanel('${d.id}')">${d.name}</div>`
+  ).join('') || '<div style="color:var(--td);font-size:11px">None</div>';
+
+  let changesHtml = '';
+  if (c.changes && c.changes.length) {
+    changesHtml = c.changes.map(ch => `
+      <div class="sp-change">
+        <div class="sp-change-hdr">
+          <span class="sp-change-step">Step ${ch.step}</span>
+          <span class="sp-change-ver">${ch.ver}</span>
+        </div>
+        <div class="sp-change-desc">${ch.desc}</div>
+        ${ch.before ? `<div class="sp-code-label">Before (ExoPlayer)</div><div class="sp-code before">${escHtml(ch.before)}</div>` : ''}
+        ${ch.after ? `<div class="sp-code-label">After (Media3 1.5.1)</div><div class="sp-code after">${escHtml(ch.after)}</div>` : ''}
+      </div>
+    `).join('');
+  } else {
+    changesHtml = '<div style="color:var(--td);font-size:11px;padding:4px 0">Step 1: Package rename only (mechanical)</div>';
+  }
+
+  const shadowLabel = c.shadow==='v2_16' ? '✓ Has V2_16 shadow' : c.shadow==='package' ? '✓ Package-shadowed (v2_16/)' : '✗ No shadow';
+  const shadowColor = c.shadow==='v2_16' ? 'var(--g)' : c.shadow==='package' ? 'var(--cyan)' : 'var(--r)';
+  const planLabel2 = c.plan==='rename' ? 'RENAME V2_16 → Media3' : c.plan==='adapt-pkg' ? 'ADAPT package copy → Media3' : c.plan==='create' ? 'CREATE new Media3 from scratch' : 'NO ACTION needed';
+  const planColor2 = c.plan==='rename' ? 'var(--p)' : c.plan==='adapt-pkg' ? 'var(--cyan)' : c.plan==='create' ? 'var(--r)' : 'var(--td)';
+
+  content.innerHTML = `
+    <div class="sp-header">
+      <div class="sp-name">${c.name}</div>
+      <div class="sp-purpose">${c.purpose}</div>
+      <div class="sp-badges">
+        <span class="sp-badge ${effortClass}">${effortLabel}</span>
+        <span style="font-size:11px;color:var(--td)">${c.loc} LOC · ${c.layer}</span>
+      </div>
+      <div style="margin:10px 0;padding:10px;background:var(--s2);border-radius:8px;border:1px solid var(--bd)">
+        <div style="font-size:11px;font-weight:600;color:var(--td);margin-bottom:6px">ACTIVE FILE (Source of Truth)</div>
+        ${c.file ? `<a href="${LG_VIEW}${c.file}" target="_blank" style="font-family:SF Mono,monospace;font-size:10.5px;color:var(--a);word-break:break-all">${c.file.split('/').slice(-1)[0]} 🔍</a>` : ''}
+        <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
+          <span style="color:${shadowColor};font-size:11px;font-weight:600">${shadowLabel}</span>
+        </div>
+        ${c.shadow==='v2_16' ? `<div style="margin-top:4px"><a href="${lgUrlV2(c.name)}" target="_blank" style="font-family:SF Mono,monospace;font-size:10px;color:var(--p)">${c.name}ExoV2_16 🔍</a></div>` : ''}
+        ${c.shadow==='package' ? `<div style="margin-top:4px;font-family:SF Mono,monospace;font-size:10px;color:var(--cyan)">→ v2_16/ package copy exists</div>` : ''}
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">
+          <div style="font-size:11px;font-weight:600;color:var(--td);margin-bottom:4px">MEDIA3 PLAN</div>
+          <span style="color:${planColor2};font-size:12px;font-weight:600">${planLabel2}</span>
+        </div>
+      </div>
+    </div>
+    <div class="sp-section open">
+      <h4 onclick="this.parentElement.classList.toggle('open')">Dependencies (${(c.deps||[]).length})</h4>
+      <div class="sp-section-body">${depsHtml}</div>
+    </div>
+    <div class="sp-section open">
+      <h4 onclick="this.parentElement.classList.toggle('open')">Used By (${dependents.length})</h4>
+      <div class="sp-section-body">${depsOfHtml}</div>
+    </div>
+    <div class="sp-section open">
+      <h4 onclick="this.parentElement.classList.toggle('open')">Breaking Changes</h4>
+      <div class="sp-section-body">${changesHtml}</div>
+    </div>
+  `;
+  panel.classList.add('open');
+  render();
+}
+
+function closeSidePanel() {
+  selectedNode = null;
+  document.getElementById('side-panel').classList.remove('open');
+  render();
+}
+
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Pan & Zoom ──
+let didDrag = false;
+const canvas = document.getElementById('graph-canvas');
+canvas.addEventListener('mousedown', e => {
+  if (e.target.closest('#side-panel') || e.target.closest('#graph-controls') || e.target.closest('#graph-legend')) return;
+  dragging = true; didDrag = false; canvas.classList.add('dragging');
+  dragStart = {x:e.clientX,y:e.clientY}; panStart = {...pan};
+  e.preventDefault(); // Prevent text selection during drag
+});
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didDrag = true;
+  pan.x = panStart.x + dx;
+  pan.y = panStart.y + dy;
+  document.getElementById('graph-world').setAttribute('transform',`translate(${pan.x},${pan.y}) scale(${zoom})`);
+  renderMinimap();
+});
+window.addEventListener('mouseup', () => { dragging = false; canvas.classList.remove('dragging'); });
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const oldZoom = zoom;
+  zoom *= e.deltaY < 0 ? 1.1 : 0.9;
+  zoom = Math.max(0.15, Math.min(3, zoom));
+  pan.x = mx - (mx - pan.x) * (zoom / oldZoom);
+  pan.y = my - (my - pan.y) * (zoom / oldZoom);
+  document.getElementById('graph-world').setAttribute('transform',`translate(${pan.x},${pan.y}) scale(${zoom})`);
+  renderMinimap();
+}, {passive:false});
+
+function zoomIn() { zoom = Math.min(3, zoom*1.2); render(); }
+function zoomOut() { zoom = Math.max(0.15, zoom/1.2); render(); }
+function resetView() { pan={x:40,y:40}; zoom=1; render(); }
+function fitAll() {
+  const positioned = C.filter(c => c.x != null && c.y != null);
+  if (!positioned.length) return;
+  const allX = positioned.map(c=>c.x), allY = positioned.map(c=>c.y);
+  const minX=Math.min(...allX), maxX=Math.max(...allX)+NODE_W;
+  const minY=Math.min(...allY), maxY=Math.max(...allY)+NODE_H;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = (rect.width-80)/(maxX-minX+40);
+  const scaleY = (rect.height-80)/(maxY-minY+40);
+  zoom = Math.min(scaleX, scaleY, 1.5);
+  pan.x = (rect.width - (maxX-minX)*zoom)/2 - minX*zoom;
+  pan.y = (rect.height - (maxY-minY)*zoom)/2 - minY*zoom;
+  render();
+}
+
+// ── Minimap ──
+function renderMinimap() {
+  const mc = document.getElementById('minimap-canvas');
+  const ctx = mc.getContext('2d');
+  const w = mc.width = 180, h = mc.height = 120;
+  ctx.clearRect(0,0,w,h);
+  const pos = C.filter(c => c.x != null && c.y != null);
+  if (!pos.length) return;
+  const allX = pos.map(c=>c.x), allY = pos.map(c=>c.y);
+  const minX=Math.min(...allX)-20, maxX=Math.max(...allX)+NODE_W+20;
+  const minY=Math.min(...allY)-20, maxY=Math.max(...allY)+NODE_H+20;
+  const sx = w/(maxX-minX), sy = h/(maxY-minY);
+  const s = Math.min(sx,sy);
+  C.filter(c => c.x != null && c.y != null).forEach(c => {
+    const color = effortColor[c.effort] || '#8b949e';
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect((c.x-minX)*s, (c.y-minY)*s, NODE_W*s, NODE_H*s);
+  });
+  ctx.globalAlpha = 1;
+  // Viewport rect
+  const canvasRect = canvas.getBoundingClientRect();
+  const vx = (-pan.x/zoom - minX)*s, vy = (-pan.y/zoom - minY)*s;
+  const vw = (canvasRect.width/zoom)*s, vh = (canvasRect.height/zoom)*s;
+  const vp = document.getElementById('minimap-viewport');
+  vp.style.left = Math.max(0,vx)+'px'; vp.style.top = Math.max(0,vy)+'px';
+  vp.style.width = Math.min(w,vw)+'px'; vp.style.height = Math.min(h,vh)+'px';
+}
+
+// ── Init ──
+layoutNodes();
+render();
+// Auto-fit on first load after DOM is ready
+setTimeout(() => fitAll(), 100);
+</script>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- GAP ANALYSIS TAB                                               -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="tab-gapanalysis" style="display:none;">
+<style>
+#tab-gapanalysis{padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e6edf3;background:#0d1117;min-height:100vh;overflow-y:auto}
+.ga-header h2{font-size:20px;font-weight:600;margin:0 0 6px}
+.ga-header p{font-size:13px;color:#8b949e;margin:0 0 20px;line-height:1.5}
+.ga-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.ga-stat{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;text-align:center}
+.ga-stat .num{font-size:2em;font-weight:800;font-family:'SF Mono',monospace}
+.ga-stat .lbl{font-size:.8em;color:#8b949e;margin-top:4px}
+.ga-stat.green .num{color:#3fb950} .ga-stat.yellow .num{color:#d29922} .ga-stat.red .num{color:#f85149} .ga-stat.blue .num{color:#58a6ff} .ga-stat.purple .num{color:#bc8cff}
+.ga-section{background:#161b22;border:1px solid #30363d;border-radius:12px;margin-bottom:16px;overflow:hidden}
+.ga-section-hdr{padding:14px 18px;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;border-bottom:1px solid transparent}
+.ga-section-hdr:hover{background:#1c2333}
+.ga-section.open .ga-section-hdr{border-bottom-color:#30363d}
+.ga-section-hdr .chev{color:#8b949e;font-size:.8em;transition:transform .2s;width:16px}
+.ga-section.open .ga-section-hdr .chev{transform:rotate(90deg)}
+.ga-section-hdr .title{font-weight:600;flex:1}
+.ga-section-hdr .count{font-family:'SF Mono',monospace;font-size:.85em;color:#8b949e}
+.ga-section-body{display:none;padding:0}
+.ga-section.open .ga-section-body{display:block}
+.ga-row{display:grid;grid-template-columns:2fr 1.5fr .8fr .6fr;padding:8px 18px;border-bottom:1px solid rgba(48,54,61,.5);font-size:.85em;align-items:center;gap:8px}
+.ga-row:hover{background:rgba(88,166,255,.03)}
+.ga-row.header{background:#1c2333;font-weight:600;color:#8b949e;font-size:.75em;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0}
+.ga-row .name{font-weight:600}
+.ga-row .path{font-family:'SF Mono',monospace;font-size:.78em;color:#8b949e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ga-row a{color:#58a6ff;text-decoration:none}
+.ga-row a:hover{text-decoration:underline}
+.ga-badge{padding:2px 8px;border-radius:10px;font-size:.7em;font-weight:700;text-transform:uppercase;display:inline-block}
+.ga-badge.matched{background:rgba(63,185,80,.15);color:#3fb950}
+.ga-badge.gap{background:rgba(248,81,73,.15);color:#f85149}
+.ga-badge.orphan{background:rgba(210,153,34,.15);color:#d29922}
+.ga-badge.ext{background:rgba(88,166,255,.1);color:#58a6ff}
+.ga-badge.factory{background:rgba(188,140,255,.1);color:#bc8cff}
+.ga-badge.data{background:rgba(86,212,221,.1);color:#56d4dd}
+.ga-badge.renderer{background:rgba(219,109,40,.1);color:#db6d28}
+</style>
+
+<div class="ga-header">
+<h2>Active vs ExoV2_16 Gap Analysis</h2>
+<p>Cross-check of production (non-suffixed) ExoPlayer files against their ExoV2_16 shadow copies. Gaps = active files without shadows that need new Media3 versions. Orphans = ExoV2_16 files whose active counterparts were refactored or removed.</p>
+</div>
+
+<div class="ga-stats">
+<div class="ga-stat blue"><div class="num">162</div><div class="lbl">Active Files</div></div>
+<div class="ga-stat purple"><div class="num">175</div><div class="lbl">ExoV2_16 Shadows</div></div>
+<div class="ga-stat green"><div class="num">139</div><div class="lbl">Matched Pairs (86.9%)</div></div>
+<div class="ga-stat red"><div class="num">21</div><div class="lbl">GAPS (Missing Shadow)</div></div>
+<div class="ga-stat yellow"><div class="num">34</div><div class="lbl">Orphans (No Active)</div></div>
+</div>
+
+<!-- GAPS Section -->
+<div class="ga-section open" onclick="this.classList.toggle('open')">
+<div class="ga-section-hdr">
+<span class="chev">▸</span>
+<span class="title" style="color:#f85149">GAPS — Active files with NO ExoV2_16 shadow (21 files)</span>
+<span class="count">These need new Media3 versions CREATED</span>
+</div>
+<div class="ga-section-body" onclick="event.stopPropagation()">
+<div class="ga-row header"><span>Class</span><span>File Path</span><span>Type</span><span>Priority</span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+MediaPlayerFactoryImpl&repo=Snapchat%2Fmobile" target="_blank">MediaPlayerFactoryImpl</a></span><span class="path" title="playback/core/.../player/MediaPlayerFactoryImpl.kt">playback/core/player/MediaPlayerFactoryImpl.kt</span><span><span class="ga-badge factory">Factory</span></span><span><span class="ga-badge gap">HIGH</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+StubAudioManager&repo=Snapchat%2Fmobile" target="_blank">StubAudioManager</a></span><span class="path" title="playback/core/StubAudioManager.kt">playback/core/StubAudioManager.kt</span><span><span class="ga-badge renderer">Stub</span></span><span><span class="ga-badge gap">HIGH</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+CodecPreConfigurePlugin&repo=Snapchat%2Fmobile" target="_blank">CodecPreConfigurePlugin</a></span><span class="path" title="opera/warmup/core/CodecPreConfigurePlugin.kt">opera/warmup/core/CodecPreConfigurePlugin.kt</span><span><span class="ga-badge factory">Plugin</span></span><span><span class="ga-badge gap">HIGH</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+CodecPreConfigurator&repo=Snapchat%2Fmobile" target="_blank">CodecPreConfigurator</a></span><span class="path" title="opera/warmup/core/CodecPreConfigurator.kt">opera/warmup/core/CodecPreConfigurator.kt</span><span><span class="ga-badge factory">Utility</span></span><span><span class="ga-badge gap">HIGH</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+SnapMediaCodecAudioRenderer&repo=Snapchat%2Fmobile" target="_blank">SnapMediaCodecAudioRenderer</a></span><span class="path" title="playback/core/renderer/SnapMediaCodecAudioRenderer.kt">playback/core/renderer/SnapMediaCodecAudioRenderer.kt</span><span><span class="ga-badge renderer">Renderer</span></span><span><span class="ga-badge gap">HIGH</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+ExoFormatExtensions&repo=Snapchat%2Fmobile" target="_blank">ExoFormatExtensions</a></span><span class="path" title="media-engine/api/extensions/ExoFormatExtensions.kt">media-engine/api/extensions/ExoFormatExtensions.kt</span><span><span class="ga-badge ext">Extension</span></span><span><span class="ga-badge gap">MED</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+MediaFormatExtensions&repo=Snapchat%2Fmobile" target="_blank">MediaFormatExtensions</a></span><span class="path" title="media-engine/api/extensions/MediaFormatExtensions.kt">media-engine/api/extensions/MediaFormatExtensions.kt</span><span><span class="ga-badge ext">Extension</span></span><span><span class="ga-badge gap">MED</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+ExoPlaybackExceptionExtensions&repo=Snapchat%2Fmobile" target="_blank">ExoPlaybackExceptionExtensions</a></span><span class="path" title="playback/api/ExoPlaybackExceptionExtensions.kt">playback/api/ExoPlaybackExceptionExtensions.kt</span><span><span class="ga-badge ext">Extension</span></span><span><span class="ga-badge gap">MED</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+ExoMediaCodecRenderHelper&repo=Snapchat%2Fmobile" target="_blank">ExoMediaCodecRenderHelper</a></span><span class="path" title="media-engine/src/ExoMediaCodecRenderHelper.kt">media-engine/src/ExoMediaCodecRenderHelper.kt</span><span><span class="ga-badge renderer">Helper</span></span><span><span class="ga-badge gap">MED</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=ExoPlayerExtention&repo=Snapchat%2Fmobile" target="_blank">ExoPlayerExtention</a></span><span class="path" title="media-engine/src/ExoPlayerExtention.kt">media-engine/src/ExoPlayerExtention.kt</span><span><span class="ga-badge ext">Extension</span></span><span><span class="ga-badge gap">MED</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+PlaybackErrorInfo&repo=Snapchat%2Fmobile" target="_blank">PlaybackErrorInfo</a></span><span class="path" title="playback/api/PlaybackErrorInfo.kt">playback/api/PlaybackErrorInfo.kt</span><span><span class="ga-badge data">Data</span></span><span><span class="ga-badge gap">MED</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+PlaybackErrorUtils&repo=Snapchat%2Fmobile" target="_blank">PlaybackErrorUtils</a></span><span class="path" title="playback/core/PlaybackErrorUtils.kt">playback/core/PlaybackErrorUtils.kt</span><span><span class="ga-badge ext">Utility</span></span><span><span class="ga-badge gap">MED</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+PlaybackInfo&repo=Snapchat%2Fmobile" target="_blank">PlaybackInfo</a></span><span class="path" title="playback/core/renderer/PlaybackInfo.kt">playback/core/renderer/PlaybackInfo.kt</span><span><span class="ga-badge data">Data</span></span><span><span class="ga-badge gap">LOW</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+PlayerAnalyticsConverter&repo=Snapchat%2Fmobile" target="_blank">PlayerAnalyticsConverter</a></span><span class="path" title="playback/metrics/core/PlayerAnalyticsConverter.kt">playback/metrics/core/PlayerAnalyticsConverter.kt</span><span><span class="ga-badge ext">Converter</span></span><span><span class="ga-badge gap">LOW</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+AudioFormat&repo=Snapchat%2Fmobile" target="_blank">AudioFormat</a></span><span class="path" title="media-engine/api/audio/AudioFormat.kt">media-engine/api/audio/AudioFormat.kt</span><span><span class="ga-badge data">Data</span></span><span><span class="ga-badge gap">LOW</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+MixedAudioSource&repo=Snapchat%2Fmobile" target="_blank">MixedAudioSource</a></span><span class="path" title="media-engine/src/MixedAudioSource.kt">media-engine/src/MixedAudioSource.kt</span><span><span class="ga-badge renderer">Component</span></span><span><span class="ga-badge gap">LOW</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+PassThroughAudioDataSource&repo=Snapchat%2Fmobile" target="_blank">PassThroughAudioDataSource</a></span><span class="path" title="media-engine/src/PassThroughAudioDataSource.kt">media-engine/src/PassThroughAudioDataSource.kt</span><span><span class="ga-badge data">DataSource</span></span><span><span class="ga-badge gap">LOW</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+NetworkRequestExtensions&repo=Snapchat%2Fmobile" target="_blank">NetworkRequestExtensions</a></span><span class="path" title="opera/network/NetworkRequestExtensions.kt">opera/network/NetworkRequestExtensions.kt</span><span><span class="ga-badge ext">Extension</span></span><span><span class="ga-badge gap">LOW</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+DefaultStreamingChunkSizeLimitCalculator&repo=Snapchat%2Fmobile" target="_blank">DefaultStreamingChunkSizeLimitCalculator</a></span><span class="path" title="opera/network/DefaultStreamingChunkSizeLimitCalculator.kt">opera/network/DefaultStreamingChunkSizeLimitCalculator.kt</span><span><span class="ga-badge factory">Calculator</span></span><span><span class="ga-badge gap">LOW</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+StreamingChunkSizeLimitCalculator&repo=Snapchat%2Fmobile" target="_blank">StreamingChunkSizeLimitCalculator</a></span><span class="path" title="opera/network/StreamingChunkSizeLimitCalculator.kt">opera/network/StreamingChunkSizeLimitCalculator.kt</span><span><span class="ga-badge factory">Interface</span></span><span><span class="ga-badge gap">LOW</span></span></div>
+
+<div class="ga-row"><span class="name"><a href="https://livegrep.sc-corp.net/search?q=class+StreamingUriHandler&repo=Snapchat%2Fmobile" target="_blank">StreamingUriHandler</a></span><span class="path" title="opera/network/StreamingUriHandler.kt">opera/network/StreamingUriHandler.kt</span><span><span class="ga-badge ext">Handler</span></span><span><span class="ga-badge gap">LOW</span></span></div>
+
+</div>
+</div>
+
+<!-- ORPHANS Section -->
+<div class="ga-section" onclick="this.classList.toggle('open')">
+<div class="ga-section-hdr">
+<span class="chev">▸</span>
+<span class="title" style="color:#d29922">ORPHANS — ExoV2_16 shadows with NO active counterpart (34 files)</span>
+<span class="count">May be stale — need audit before migrating</span>
+</div>
+<div class="ga-section-body" onclick="event.stopPropagation()">
+<div class="ga-row header"><span>Class</span><span>ExoV2_16 File</span><span>Type</span><span>Status</span></div>
+
+<div class="ga-row"><span class="name">AndroidMediaCodec</span><span class="path">media-engine/codec/AndroidMediaCodecExoV2_16.kt</span><span><span class="ga-badge factory">Codec</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">AudioDecoder</span><span class="path">playback/core/renderer/AudioDecoderExoV2_16.kt</span><span><span class="ga-badge renderer">Decoder</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">BufferedVideoProvider</span><span class="path">playback/core/renderer/BufferedVideoProviderExoV2_16.kt</span><span><span class="ga-badge renderer">Provider</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">CachedPipelineManager</span><span class="path">playback/core/renderer/CachedPipelineManagerExoV2_16.kt</span><span><span class="ga-badge renderer">Manager</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">Codec (Java)</span><span class="path">media-engine/codec/CodecExoV2_16.java</span><span><span class="ga-badge factory">Codec</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">CodecPoolBlizzardLogger</span><span class="path">media-engine/codec/analytics/CodecPoolBlizzardLoggerExoV2_16.kt</span><span><span class="ga-badge ext">Analytics</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">CodecPoolEventLogger</span><span class="path">media-engine/codec/analytics/CodecPoolEventLoggerExoV2_16.kt</span><span><span class="ga-badge ext">Analytics</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">CodecPoolEventTracker</span><span class="path">media-engine/codec/analytics/CodecPoolEventTrackerExoV2_16.kt</span><span><span class="ga-badge ext">Analytics</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">CodecPoolGrapheneLogger</span><span class="path">media-engine/codec/analytics/CodecPoolGrapheneLoggerExoV2_16.kt</span><span><span class="ga-badge ext">Analytics</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">CodecPoolTimberLogger</span><span class="path">media-engine/codec/analytics/CodecPoolTimberLoggerExoV2_16.kt</span><span><span class="ga-badge ext">Analytics</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">CodecPreloader</span><span class="path">media-engine/codec/CodecPreloaderExoV2_16.kt</span><span><span class="ga-badge factory">Preloader</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">CodecReporter</span><span class="path">media-engine/codec/CodecReporterExoV2_16.kt</span><span><span class="ga-badge ext">Analytics</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">CodecReporterImpl</span><span class="path">media-engine/codec/CodecReporterImplExoV2_16.kt</span><span><span class="ga-badge ext">Analytics</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">CustomizedNativeCodec</span><span class="path">media-engine/codec/CustomizedNativeCodecExoV2_16.kt</span><span><span class="ga-badge factory">Codec</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">Decoder (Java)</span><span class="path">media-engine/pipeline/DecoderExoV2_16.java</span><span><span class="ga-badge renderer">Decoder</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">MediaCodecConfigurer</span><span class="path">media-engine/codec/MediaCodecConfigurerExoV2_16.java</span><span><span class="ga-badge factory">Configurer</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">MediaCodecException</span><span class="path">media-engine/exception/MediaCodecExceptionExoV2_16.kt</span><span><span class="ga-badge data">Exception</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">MediaCodecWarmup (API)</span><span class="path">playback/api/codecs/MediaCodecWarmupExoV2_16.kt</span><span><span class="ga-badge factory">Interface</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">MediaPlayerFactory (API)</span><span class="path">playback/api/MediaPlayerFactoryExoV2_16.kt</span><span><span class="ga-badge factory">Interface</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">NativeCodec</span><span class="path">media-engine/api/codec/NativeCodecExoV2_16.kt</span><span><span class="ga-badge factory">Codec</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">PipelineManagerFactory</span><span class="path">playback/core/renderer/PipelineManagerFactoryExoV2_16.kt</span><span><span class="ga-badge factory">Factory</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">PlaybackBandwidthMeterFactory</span><span class="path">playback/api/PlaybackBandwidthMeterFactoryExoV2_16.kt</span><span><span class="ga-badge factory">Interface</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">PlaybackRequest</span><span class="path">playback/api/PlaybackRequestExoV2_16.kt</span><span><span class="ga-badge data">Model</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">PlayerDebugEventLogger</span><span class="path">media-engine/api/log/PlayerDebugEventLoggerExoV2_16.kt</span><span><span class="ga-badge ext">Logger</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">PreloadCodecSessionFactory</span><span class="path">media-engine/codec/PreloadCodecSessionFactoryExoV2_16.kt</span><span><span class="ga-badge factory">Factory</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">SoftwareDecoderInstaller</span><span class="path">decoders/core/SoftwareDecoderInstallerExoV2_16.kt</span><span><span class="ga-badge renderer">Installer</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">SoftwareDecodersApi</span><span class="path">decoders/api/SoftwareDecodersApiExoV2_16.kt</span><span><span class="ga-badge factory">API</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">SoftwareDecodersApiImpl</span><span class="path">decoders/core/SoftwareDecodersApiImplExoV2_16.kt</span><span><span class="ga-badge factory">Impl</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">SoftwareDecodersApiNoOp</span><span class="path">decoders/api/SoftwareDecodersApiNoOpExoV2_16.kt</span><span><span class="ga-badge factory">NoOp</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">SyncAndroidMediaCodec</span><span class="path">media-engine/codec/SyncAndroidMediaCodecExoV2_16.kt</span><span><span class="ga-badge factory">Codec</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">TraceableCodec</span><span class="path">media-engine/codec/TraceableCodecExoV2_16.kt</span><span><span class="ga-badge factory">Codec</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">VideoComponentFactory</span><span class="path">playback/core/renderer/VideoComponentFactoryExoV2_16.kt</span><span><span class="ga-badge factory">Factory</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">VideoDecoder</span><span class="path">playback/core/renderer/VideoDecoderExoV2_16.kt</span><span><span class="ga-badge renderer">Decoder</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">VideoRenderer</span><span class="path">playback/core/renderer/VideoRendererExoV2_16.kt</span><span><span class="ga-badge renderer">Renderer</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+<div class="ga-row"><span class="name">ReclaimableMediaCodec</span><span class="path">media-engine/codec/ReclaimableMediaCodecExoV2_16.kt</span><span><span class="ga-badge factory">Codec</span></span><span><span class="ga-badge orphan">Audit</span></span></div>
+
+</div>
+</div>
+
+<!-- MATCHED Section -->
+<div class="ga-section" onclick="this.classList.toggle('open')">
+<div class="ga-section-hdr">
+<span class="chev">▸</span>
+<span class="title" style="color:#3fb950">MATCHED — Active files with ExoV2_16 shadow (139 pairs)</span>
+<span class="count">Ready for RENAME → Media3</span>
+</div>
+<div class="ga-section-body" onclick="event.stopPropagation()">
+<div style="padding:16px;color:#8b949e;font-size:13px">
+These 139 matched pairs are the files shown in the <strong>Dependency Graph</strong> tab. Each has both an active (non-suffixed) version and an ExoV2_16 shadow copy. The migration strategy is to <strong>RENAME</strong> the ExoV2_16 copy to Media3 and fix breaking API changes.<br><br>
+<span style="color:#3fb950;font-weight:600">Coverage: 86.9%</span> of active ExoPlayer files have proper ExoV2_16 shadows.
+Switch to the <a href="#" onclick="switchTab('graph');return false" style="color:#58a6ff">Dependency Graph</a> tab to explore them.
+</div>
+</div>
+</div>
+
+<!-- Impact Summary -->
+<div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px;margin-top:16px">
+<h3 style="font-size:14px;margin-bottom:12px;color:#e6edf3">Migration Impact Summary</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px">
+<div>
+<div style="color:#3fb950;font-weight:600;margin-bottom:4px">139 RENAME (ExoV2_16 → Media3)</div>
+<div style="color:#8b949e">Existing shadows. Rename suffix, fix imports + breaking API changes per version ladder.</div>
+</div>
+<div>
+<div style="color:#f85149;font-weight:600;margin-bottom:4px">21 CREATE (No shadow exists)</div>
+<div style="color:#8b949e">5 HIGH priority (MediaPlayerFactoryImpl, StubAudioManager, CodecPreConfigure*, SnapMediaCodecAudioRenderer). 8 MED (extensions, helpers). 8 LOW (data classes, utilities).</div>
+</div>
+<div>
+<div style="color:#d29922;font-weight:600;margin-bottom:4px">34 ORPHANS (Audit needed)</div>
+<div style="color:#8b949e">ExoV2_16 files whose active counterparts were refactored/renamed. Need 1:1 audit to determine: delete, rename-to-match, or keep.</div>
+</div>
+<div>
+<div style="color:#58a6ff;font-weight:600;margin-bottom:4px">Revised Total: 160+ files</div>
+<div style="color:#8b949e">139 rename + 21 create + orphan audit. Previous V7 plan estimated 152 rename + 3 create — <span style="color:#f85149">gap of 18 files</span> that were missed.</div>
+</div>
+</div>
+</div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- Tab 2: Ad-hoc ExoPlayer Consumers -->
+<div id="tab-consumers" style="display:none;">
+
+<style>
+  /* ===== Tab 2 Scoped Styles ===== */
+  #tab-consumers {
+    padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Text', sans-serif;
+    color: #e6edf3;
+    background: #0d1117;
+    min-height: 100vh;
+    box-sizing: border-box;
+  }
+
+  .consumers-header {
+    margin-bottom: 28px;
+  }
+
+  .consumers-header h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #e6edf3;
+    margin: 0 0 8px 0;
+  }
+
+  .consumers-header p {
+    font-size: 13px;
+    color: #8b949e;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .consumers-stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 20px;
+    font-size: 12px;
+    color: #8b949e;
+  }
+
+  .stat-pill .stat-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .stat-pill .stat-count {
+    font-weight: 600;
+    color: #e6edf3;
+  }
+
+  /* ===== Grid ===== */
+  .consumers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 16px;
+  }
+
+  /* ===== Card ===== */
+  .consumer-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .consumer-card:hover {
+    border-color: #58a6ff;
+    box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.15), 0 4px 16px rgba(0,0,0,0.4);
+    transform: translateY(-1px);
+  }
+
+  .consumer-card.expanded {
+    border-color: #58a6ff;
+    box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.2);
+  }
+
+  .consumer-card-header {
+    padding: 16px 16px 0 16px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .consumer-card-title-block {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .consumer-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e6edf3;
+    margin: 0 0 4px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .consumer-card-file {
+    font-size: 11px;
+    color: #8b949e;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .consumer-expand-icon {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #1c2333;
+    border: 1px solid #30363d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.2s ease;
+    margin-top: 2px;
+  }
+
+  .consumer-card.expanded .consumer-expand-icon {
+    background: rgba(88,166,255,0.15);
+    border-color: #58a6ff;
+    transform: rotate(180deg);
+  }
+
+  .consumer-expand-icon svg {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: #8b949e;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .consumer-card.expanded .consumer-expand-icon svg {
+    stroke: #58a6ff;
+  }
+
+  /* Badges row */
+  .consumer-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+    line-height: 1.6;
+    white-space: nowrap;
+  }
+
+  .badge-v2-no {
+    background: rgba(248, 81, 73, 0.1);
+    color: #f85149;
+    border-color: rgba(248, 81, 73, 0.3);
+  }
+
+  .badge-v2-yes {
+    background: rgba(63, 185, 80, 0.1);
+    color: #3fb950;
+    border-color: rgba(63, 185, 80, 0.3);
+  }
+
+  .badge-create {
+    background: rgba(88, 166, 255, 0.1);
+    color: #58a6ff;
+    border-color: rgba(88, 166, 255, 0.3);
+  }
+
+  .badge-rename {
+    background: rgba(188, 140, 255, 0.1);
+    color: #bc8cff;
+    border-color: rgba(188, 140, 255, 0.3);
+  }
+
+  .badge-simple {
+    background: rgba(63, 185, 80, 0.1);
+    color: #3fb950;
+    border-color: rgba(63, 185, 80, 0.3);
+  }
+
+  .badge-moderate {
+    background: rgba(210, 153, 34, 0.1);
+    color: #d29922;
+    border-color: rgba(210, 153, 34, 0.3);
+  }
+
+  .badge-high {
+    background: rgba(248, 81, 73, 0.1);
+    color: #f85149;
+    border-color: rgba(248, 81, 73, 0.3);
+  }
+
+  /* COF flag */
+  .consumer-cof {
+    margin: 0 16px 12px;
+    padding: 7px 10px;
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .consumer-cof-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+
+  .consumer-cof-value {
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    color: #bc8cff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Description */
+  .consumer-desc {
+    margin: 0 16px 16px;
+    font-size: 12px;
+    color: #8b949e;
+    line-height: 1.55;
+  }
+
+  /* ===== Expanded Detail Panel ===== */
+  .consumer-detail {
+    display: none;
+    border-top: 1px solid #21262d;
+    background: #0d1117;
+  }
+
+  .consumer-card.expanded .consumer-detail {
+    display: block;
+    animation: slideDown 0.2s ease;
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .detail-tabs {
+    display: flex;
+    border-bottom: 1px solid #21262d;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .detail-tabs::-webkit-scrollbar { display: none; }
+
+  .detail-tab-btn {
+    padding: 9px 14px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #8b949e;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -1px;
+  }
+
+  .detail-tab-btn:hover { color: #e6edf3; }
+
+  .detail-tab-btn.active {
+    color: #58a6ff;
+    border-bottom-color: #58a6ff;
+  }
+
+  .detail-panel {
+    display: none;
+    padding: 16px;
+  }
+
+  .detail-panel.active { display: block; }
+
+  /* Code block */
+  .detail-code {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    color: #e6edf3;
+    line-height: 1.6;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0;
+  }
+
+  .detail-code .kw   { color: #ff7b72; }
+  .detail-code .fn   { color: #d2a8ff; }
+  .detail-code .str  { color: #a5d6ff; }
+  .detail-code .cm   { color: #8b949e; font-style: italic; }
+  .detail-code .cls  { color: #ffa657; }
+  .detail-code .num  { color: #79c0ff; }
+  .detail-code .ann  { color: #3fb950; }
+
+  /* Change list */
+  .detail-changes {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .detail-changes li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: #e6edf3;
+    line-height: 1.5;
+  }
+
+  .detail-changes li::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #58a6ff;
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+
+  .detail-changes .change-from {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 10px;
+    color: #f85149;
+    background: rgba(248,81,73,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .detail-changes .change-to {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 10px;
+    color: #3fb950;
+    background: rgba(63,185,80,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .detail-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 8px 0;
+  }
+
+  /* Testing approach */
+  .testing-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .testing-step {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 12px;
+    color: #e6edf3;
+    line-height: 1.5;
+  }
+
+  .testing-step-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(88,166,255,0.12);
+    border: 1px solid rgba(88,166,255,0.3);
+    color: #58a6ff;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .cof-pattern-note {
+    font-size: 11px;
+    color: #8b949e;
+    margin: 8px 0 0 0;
+    font-style: italic;
+  }
+
+  /* Responsive */
+  @media (max-width: 780px) {
+    .consumers-grid {
+      grid-template-columns: 1fr;
+    }
+    #tab-consumers { padding: 16px; }
+  }
+</style>
+
+<div class="consumers-header">
+  <h2>Ad-hoc ExoPlayer Consumers</h2>
+  <p>8 independent components across Cheerios, Lenses, Snap Devices, and Messaging that use ExoPlayer directly and require individual migration with per-component COF flag gating.</p>
+</div>
+
+<div class="consumers-stats">
+  <div class="stat-pill">
+    <span class="stat-dot" style="background:#58a6ff;"></span>
+    <span class="stat-count">8</span> Total Components
+  </div>
+  <div class="stat-pill">
+    <span class="stat-dot" style="background:#3fb950;"></span>
+    <span class="stat-count">2</span> Simple
+  </div>
+  <div class="stat-pill">
+    <span class="stat-dot" style="background:#d29922;"></span>
+    <span class="stat-count">4</span> Moderate
+  </div>
+  <div class="stat-pill">
+    <span class="stat-dot" style="background:#f85149;"></span>
+    <span class="stat-count">2</span> High Complexity
+  </div>
+  <div class="stat-pill">
+    <span class="stat-dot" style="background:#bc8cff;"></span>
+    <span class="stat-count">4</span> Have V2_16 (RENAME)
+  </div>
+  <div class="stat-pill">
+    <span class="stat-dot" style="background:#58a6ff;"></span>
+    <span class="stat-count">4</span> No V2_16 (CREATE)
+  </div>
+</div>
+
+<div class="consumers-grid" id="consumers-grid">
+  <!-- Cards injected by JS -->
+</div>
+
+<script>
+(function() {
+  const CARDS = [
+    {
+      id: 'cheerios-pair-video',
+      name: 'Cheerios Pair Video',
+      file: 'components/cheerios/core/.../PairVideoController.kt',
+      hasV216: false,
+      source: 'CREATE',
+      cof: 'cheerios_use_media3_pair_video',
+      complexity: 'Simple',
+      description: 'Drone pairing video playback. Uses ExoPlayer.Builder + ProgressiveMediaSource with TextureView rendering.',
+      currentUsage: `// PairVideoController.kt
+<kw>import</kw> com.google.android.exoplayer2.<cls>ExoPlayer</cls>
+<kw>import</kw> com.google.android.exoplayer2.source.<cls>ProgressiveMediaSource</cls>
+<kw>import</kw> com.google.android.exoplayer2.upstream.<cls>DefaultDataSourceFactory</cls>
+
+<kw>val</kw> player = <cls>ExoPlayer</cls>.<fn>Builder</fn>(context).<fn>build</fn>().<fn>also</fn> {
+    it.playWhenReady = <kw>true</kw>
+    it.<fn>setVideoTextureView</fn>(textureView)
+    it.repeatMode = <cls>Player</cls>.REPEAT_MODE_ALL
+    <kw>val</kw> factory = <cls>ProgressiveMediaSource</cls>.<cls>Factory</cls>(
+        <cls>DefaultDataSourceFactory</cls>(context)
+    )
+    it.<fn>setMediaSource</fn>(factory.<fn>createMediaSource</fn>(uri))
+    it.<fn>prepare</fn>()
+}`,
+      changes: [
+        { text: 'Package import', from: 'com.google.android.exoplayer2.ExoPlayer', to: 'androidx.media3.exoplayer.ExoPlayer' },
+        { text: 'MediaItem import', from: 'com.google.android.exoplayer2.MediaItem', to: 'androidx.media3.common.MediaItem' },
+        { text: 'DataSource factory', from: 'DefaultDataSourceFactory(context)', to: 'DefaultDataSource.Factory(context)' },
+        { text: 'ProgressiveMediaSource package unchanged functionally — only namespace moves to media3.exoplayer.source' },
+      ],
+      cofPattern: `<cm>// In PairVideoController factory / DI module</cm>
+<kw>fun</kw> <fn>createPairVideoController</fn>(
+    context: <cls>Context</cls>,
+    cofConfig: <cls>CofConfig</cls>
+): <cls>IPairVideoController</cls> {
+    <kw>return if</kw> (cofConfig.cheeriosUseMedia3PairVideo) {
+        <cls>PairVideoControllerMedia3</cls>(context)   <cm>// new file</cm>
+    } <kw>else</kw> {
+        <cls>PairVideoController</cls>(context)         <cm>// existing file</cm>
+    }
+}`,
+      testing: [
+        'Enable COF flag `cheerios_use_media3_pair_video` on test device',
+        'Navigate to Cheerios drone pairing flow',
+        'Verify pairing video plays, loops, and renders correctly on TextureView',
+        'Check no ANR / memory leak after pairing session completes',
+        'Verify logcat shows no ExoPlayer2 class references at runtime',
+      ],
+    },
+    {
+      id: 'cheerios-onboarding',
+      name: 'Cheerios Onboarding',
+      file: 'components/cheerios/dynamic/.../CheeriosOnboardingFragment.kt',
+      hasV216: false,
+      source: 'CREATE',
+      cof: 'cheerios_use_media3_onboarding_video',
+      complexity: 'Moderate',
+      description: 'Onboarding video with custom looper thread, TextureView aspect ratio management, and progress event tracking.',
+      currentUsage: `<cm>// CheeriosOnboardingFragment.kt</cm>
+<kw>private val</kw> playerLooper = <cls>HandlerThread</cls>(<str>"CheeriosOnboarding"</str>)
+    .<fn>also</fn> { it.<fn>start</fn>() }.looper
+
+<kw>val</kw> player = <cls>ExoPlayer</cls>.<cls>Builder</cls>(context)
+    .<fn>setLooper</fn>(playerLooper)
+    .<fn>build</fn>()
+
+player.<fn>addListener</fn>(playerEventListener)
+player.<fn>setVideoTextureView</fn>(textureView)
+player.<fn>setMediaItem</fn>(<cls>MediaItem</cls>.<fn>fromUri</fn>(videoUri))
+player.<fn>prepare</fn>()
+player.playWhenReady = <kw>true</kw>
+
+<cm>// Aspect ratio in SurfaceTextureListener</cm>
+<kw>override fun</kw> <fn>onSurfaceTextureSizeChanged</fn>(
+    surface: <cls>SurfaceTexture</cls>, width: <cls>Int</cls>, height: <cls>Int</cls>
+) {
+    <fn>updateAspectRatio</fn>(player.videoSize.width, player.videoSize.height)
+}`,
+      changes: [
+        { text: 'Package rename', from: 'com.google.android.exoplayer2.*', to: 'androidx.media3.*' },
+        { text: 'ProgressiveMediaSource.Factory pattern is identical in Media3 — direct swap' },
+        { text: 'Player.Listener interface moved', from: 'com.google.android.exoplayer2.Player.Listener', to: 'androidx.media3.common.Player.Listener' },
+        { text: 'VideoSize import', from: 'com.google.android.exoplayer2.video.VideoSize', to: 'androidx.media3.common.VideoSize' },
+        { text: 'Custom HandlerThread looper approach unchanged in Media3' },
+      ],
+      cofPattern: `<cm>// CheeriosOnboardingFragment.kt</cm>
+<kw>private fun</kw> <fn>createVideoPlayer</fn>(): <cls>Player</cls> {
+    <kw>return if</kw> (cofConfig.cheeriosUseMedia3OnboardingVideo) {
+        <fn>createMedia3Player</fn>()   <cm>// Media3 ExoPlayer</cm>
+    } <kw>else</kw> {
+        <fn>createExoV2Player</fn>()    <cm>// legacy ExoPlayer2</cm>
+    }
+}`,
+      testing: [
+        'Enable `cheerios_use_media3_onboarding_video` COF flag',
+        'Run through Cheerios first-time setup onboarding screens',
+        'Verify video plays with correct aspect ratio on various screen sizes',
+        'Confirm progress events (onboarding step tracking) fire correctly',
+        'Test background/foreground transitions do not crash or stall playback',
+      ],
+    },
+    {
+      id: 'cheerios-calibration',
+      name: 'Cheerios Calibration',
+      file: 'components/cheerios/dynamic/.../CheeriosCalibrationFragment.kt',
+      hasV216: false,
+      source: 'CREATE',
+      cof: 'cheerios_use_media3_calibration_video',
+      complexity: 'Simple',
+      description: 'Spectacles calibration instructional video. Basic one-shot playback with DefaultDataSourceFactory.',
+      currentUsage: `<cm>// CheeriosCalibrationFragment.kt</cm>
+<kw>import</kw> com.google.android.exoplayer2.<cls>ExoPlayer</cls>
+<kw>import</kw> com.google.android.exoplayer2.source.<cls>ProgressiveMediaSource</cls>
+<kw>import</kw> com.google.android.exoplayer2.upstream.<cls>DefaultDataSourceFactory</cls>
+
+<kw>val</kw> dataSourceFactory = <cls>DefaultDataSourceFactory</cls>(requireContext())
+<kw>val</kw> mediaSource = <cls>ProgressiveMediaSource</cls>.<cls>Factory</cls>(dataSourceFactory)
+    .<fn>createMediaSource</fn>(<cls>MediaItem</cls>.<fn>fromUri</fn>(calibrationVideoUri))
+
+player = <cls>ExoPlayer</cls>.<cls>Builder</cls>(requireContext()).<fn>build</fn>().<fn>also</fn> {
+    it.<fn>setMediaSource</fn>(mediaSource)
+    it.<fn>prepare</fn>()
+    it.playWhenReady = <kw>true</kw>
+}`,
+      changes: [
+        { text: 'Package rename only', from: 'com.google.android.exoplayer2', to: 'androidx.media3' },
+        { text: 'DataSource factory class renamed', from: 'DefaultDataSourceFactory(context)', to: 'DefaultDataSource.Factory(context)' },
+        { text: 'All other APIs (ProgressiveMediaSource, MediaItem, ExoPlayer.Builder) identical after namespace change' },
+      ],
+      cofPattern: `<cm>// CalibrationVideoPlayerFactory.kt</cm>
+<kw>fun</kw> <fn>build</fn>(context: <cls>Context</cls>): <cls>Player</cls> =
+    <kw>if</kw> (cofConfig.cheeriosUseMedia3CalibrationVideo) {
+        <cls>CalibrationVideoPlayerMedia3</cls>(context)
+    } <kw>else</kw> {
+        <cls>CalibrationVideoPlayerExo2</cls>(context)
+    }`,
+      testing: [
+        'Enable `cheerios_use_media3_calibration_video` COF flag',
+        'Navigate to Spectacles calibration screen',
+        'Confirm calibration video loads and plays to completion',
+        'Verify player releases correctly after fragment destroyed',
+      ],
+    },
+    {
+      id: 'lenses-video-player',
+      name: 'Lenses Video Player',
+      file: 'components/lenses/core-camera/.../DefaultVideoPlayerView.kt',
+      hasV216: true,
+      source: 'RENAME',
+      renameFrom: 'DefaultVideoPlayerView.kt',
+      cof: 'lenses_use_media3_video_player',
+      complexity: 'High',
+      description: 'Camera lenses video preview with custom video renderers factory, RxJava integration, dedicated looper thread, and aspect ratio handling.',
+      currentUsage: `<cm>// DefaultVideoPlayerViewExoV2_16.kt</cm>
+<kw>val</kw> renderersFactory = <fn>videoRenderersFactory</fn>(context)
+
+player = <cls>ExoPlayer</cls>.<cls>Builder</cls>(
+    context,
+    renderersFactory,
+    <cls>MediaSourceFactory</cls>.UNSUPPORTED   <cm>// no media source needed</cm>
+).<fn>setLooper</fn>(playerLooper).<fn>build</fn>()
+
+player.<fn>setVideoSurface</fn>(surface)
+player.<fn>addListener</fn>(<kw>object</kw> : <cls>Player</cls>.<cls>Listener</cls> {
+    <kw>override fun</kw> <fn>onVideoSizeChanged</fn>(size: <cls>VideoSize</cls>) {
+        rxVideoSize.onNext(size)
+    }
+    <kw>override fun</kw> <fn>onRenderedFirstFrame</fn>() {
+        rxFirstFrame.onNext(<cls>Unit</cls>)
+    }
+})`,
+      changes: [
+        { text: 'Custom RenderersFactory must implement Media3 Renderer interface', from: 'ExoPlayer2 Renderer', to: 'androidx.media3.exoplayer.Renderer' },
+        { text: 'UNSUPPORTED factory location changed', from: 'MediaSourceFactory.UNSUPPORTED', to: 'androidx.media3.exoplayer.source.MediaSource.Factory.UNSUPPORTED' },
+        { text: 'VideoSize import', from: 'com.google.android.exoplayer2.video.VideoSize', to: 'androidx.media3.common.VideoSize' },
+        { text: 'Player.Listener unchanged structurally but import must move to androidx.media3.common' },
+        { text: 'Route via existing ExoV2_16 dispatch mechanism — rename file, flip COF flag' },
+      ],
+      cofPattern: `<cm>// DefaultVideoPlayerView.kt (dispatcher)</cm>
+<kw>fun</kw> <fn>create</fn>(context: <cls>Context</cls>): <cls>IVideoPlayerView</cls> {
+    <kw>val</kw> exoVersion = <cls>ExoPlayerVersionSelector</cls>.<fn>get</fn>(cofConfig)
+    <kw>return when</kw> (exoVersion) {
+        <cls>ExoVersion</cls>.MEDIA3      -> <cls>DefaultVideoPlayerViewMedia3</cls>(context)
+        <cls>ExoVersion</cls>.EXO_V2_16   -> <cls>DefaultVideoPlayerViewExoV2_16</cls>(context)
+        <kw>else</kw>                     -> <cls>DefaultVideoPlayerView</cls>(context)
+    }
+}`,
+      testing: [
+        'Enable `lenses_use_media3_video_player` COF flag',
+        'Open camera and apply a lens that uses video preview',
+        'Verify no renderer construction crashes in logcat',
+        'Confirm aspect ratio is correct and first-frame callback fires',
+        'Run RxJava subscriber assertions for videoSize and firstFrame emissions',
+      ],
+    },
+    {
+      id: 'lenses-audio-track',
+      name: 'Lenses Audio Track',
+      file: 'components/lenses/core-media/.../ExoPlayerAudioTrackFactory.java',
+      hasV216: true,
+      source: 'RENAME',
+      renameFrom: 'ExoPlayerAudioTrackFactory.java',
+      cof: 'lenses_use_media3_audio_track',
+      complexity: 'Moderate',
+      description: 'Audio playback for lenses sound effects and music. Custom audio-only renderer, custom load control, and codec pool integration.',
+      currentUsage: `<cm>// ExoPlayerAudioTrackFactoryExoV2_16.java</cm>
+<cls>DefaultLoadControl</cls> loadControl = <kw>new</kw> <cls>DefaultLoadControl</cls>.<cls>Builder</cls>()
+    .<fn>setBufferDurationsMs</fn>(MIN_BUFFER_MS, MAX_BUFFER_MS,
+        BUFFER_FOR_PLAYBACK_MS, BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS)
+    .<fn>build</fn>();
+
+<cls>RenderersFactory</cls> renderersFactory = <kw>new</kw> <cls>AudioOnlyRenderersFactory</cls>(
+    context, codecPool, audioProcessors);
+
+<kw>return new</kw> <cls>ExoPlayer</cls>.<cls>Builder</cls>(context, renderersFactory)
+    .<fn>setLoadControl</fn>(loadControl)
+    .<fn>setLooper</fn>(audioLooper)
+    .<fn>build</fn>();`,
+      changes: [
+        { text: 'Audio renderer must implement', from: 'ExoPlayer2 Renderer / AudioRenderer', to: 'androidx.media3.exoplayer.audio.AudioSink + Renderer' },
+        { text: 'DefaultLoadControl.Builder API identical in Media3 — direct port' },
+        { text: 'Codec pool integration requires adapter wrapping Media3 MediaCodecAdapter interface' },
+        { text: 'AudioProcessor interface moved', from: 'com.google.android.exoplayer2.audio.AudioProcessor', to: 'androidx.media3.common.audio.AudioProcessor' },
+        { text: 'Java interop: ensure @NonNull / @Nullable annotations match Media3 expectations' },
+      ],
+      cofPattern: `<cm>// ExoPlayerAudioTrackFactory.java (dispatcher)</cm>
+<kw>public static</kw> <cls>ExoPlayer</cls> <fn>create</fn>(
+    <cls>Context</cls> context, <cls>CofConfig</cls> cofConfig
+) {
+    <kw>if</kw> (cofConfig.<fn>isLensesUseMedia3AudioTrack</fn>()) {
+        <kw>return</kw> <cls>ExoPlayerAudioTrackFactoryMedia3</cls>.<fn>create</fn>(context);
+    }
+    <kw>return</kw> <cls>ExoPlayerAudioTrackFactoryExoV2_16</cls>.<fn>create</fn>(context);
+}`,
+      testing: [
+        'Enable `lenses_use_media3_audio_track` COF flag',
+        'Apply lens with sound effect (e.g. music or SFX triggered lens)',
+        'Verify audio plays without glitches, correct speed, no silence',
+        'Test codec pool lease/release cycle — no leaks under rapid lens switches',
+        'Confirm buffer control settings behave identically to ExoPlayer2 baseline',
+      ],
+    },
+    {
+      id: 'lenses-video-stream',
+      name: 'Lenses Video Stream',
+      file: 'components/lenses/core-media/.../ExoPlayerVideoStreamFactory.java',
+      hasV216: true,
+      source: 'RENAME',
+      renameFrom: 'ExoPlayerVideoStreamFactory.java',
+      cof: 'lenses_use_media3_video_stream',
+      complexity: 'High',
+      description: 'Video stream for effects/filters. Custom renderers with audio processor, HDR→SDR tone mapping, codec pool integration, and thread safety requirements.',
+      currentUsage: `<cm>// ExoPlayerVideoStreamFactoryExoV2_16.java</cm>
+<cls>RenderersFactory</cls> renderersFactory =
+    <kw>new</kw> <cls>VideoStreamRenderersFactory</cls>(
+        context, codecPool, hdrToSdrProcessor, audioProcessors
+    );
+
+<cls>LoadControl</cls> loadControl = <kw>new</kw> <cls>DefaultLoadControl</cls>.<cls>Builder</cls>()
+    .<fn>setBufferDurationsMs</fn>(MIN_BUFFER, MAX_BUFFER, ...)
+    .<fn>build</fn>();
+
+player = <kw>new</kw> <cls>ExoPlayer</cls>.<cls>Builder</cls>(context, renderersFactory)
+    .<fn>setLoadControl</fn>(loadControl)
+    .<fn>setLooper</fn>(videoLooper)
+    .<fn>build</fn>();
+
+<cm>// HDR→SDR processor inside VideoStreamRenderersFactory</cm>
+<kw>new</kw> <cls>MediaCodecVideoRenderer</cls>(context, codecAdapterFactory,
+    .<fn>experimentalSetHdrToSdrToneMapping</fn>(<kw>true</kw>));`,
+      changes: [
+        { text: 'HDR tone mapping API changed significantly', from: 'experimentalSetHdrToSdrToneMapping(true)', to: 'Media3 VideoFrameProcessor pipeline — needs larger refactor' },
+        { text: 'Custom renderer constructor signature changed', from: 'MediaCodecVideoRenderer(context, adapterFactory, ...)', to: 'Media3 requires additional allowedJoiningTimeMs / eventHandler params' },
+        { text: 'Codec pool adapter needed for Media3 MediaCodecAdapter interface' },
+        { text: 'AudioProcessor interface moved to androidx.media3.common.audio' },
+        { text: 'Thread safety: ExoPlayer3 stricter about looper affinity — all calls must be on player looper' },
+      ],
+      cofPattern: `<cm>// ExoPlayerVideoStreamFactory.java (dispatcher)</cm>
+<kw>public static</kw> <cls>ExoPlayer</cls> <fn>create</fn>(
+    <cls>Context</cls> context, <cls>CofConfig</cls> cofConfig
+) {
+    <kw>if</kw> (cofConfig.<fn>isLensesUseMedia3VideoStream</fn>()) {
+        <kw>return</kw> <cls>ExoPlayerVideoStreamFactoryMedia3</cls>.<fn>create</fn>(context);
+    }
+    <kw>return</kw> <cls>ExoPlayerVideoStreamFactoryExoV2_16</cls>.<fn>create</fn>(context);
+}`,
+      testing: [
+        'Enable `lenses_use_media3_video_stream` COF flag',
+        'Apply lens requiring video stream with effects (e.g. background replace)',
+        'Test HDR→SDR tone mapping on HDR-capable device — verify no color banding',
+        'Run lens with audio effect simultaneously — verify AV sync',
+        'Stress-test codec pool under rapid frame drops; check for leaks',
+        'Verify no looper affinity violations in strict mode logs',
+      ],
+    },
+    {
+      id: 'snap-devices-video',
+      name: 'Snap Devices Video',
+      file: 'components/snap-devices/base/.../DefaultVideoPlayerView.kt',
+      hasV216: true,
+      source: 'RENAME',
+      renameFrom: 'DefaultVideoPlayerView.kt',
+      cof: 'snap_devices_use_media3_video',
+      complexity: 'Moderate',
+      description: 'Drone/device video preview with DefaultRenderersFactory in extension renderer mode, decoder fallback handling, and progress tracking.',
+      currentUsage: `<cm>// DefaultVideoPlayerViewExoV2_16.kt</cm>
+<kw>val</kw> renderersFactory = <cls>DefaultRenderersFactory</cls>(context)
+    .<fn>setExtensionRendererMode</fn>(
+        <cls>DefaultRenderersFactory</cls>.EXTENSION_RENDERER_MODE_ON
+    )
+
+player = <cls>ExoPlayer</cls>.<cls>Builder</cls>(context, renderersFactory)
+    .<fn>setLooper</fn>(playerLooper)
+    .<fn>build</fn>()
+
+player.<fn>addListener</fn>(<kw>object</kw> : <cls>Player</cls>.<cls>Listener</cls> {
+    <kw>override fun</kw> <fn>onPlaybackStateChanged</fn>(state: <cls>Int</cls>) {
+        progressTracker.<fn>onStateChanged</fn>(state)
+    }
+    <kw>override fun</kw> <fn>onPlayerError</fn>(error: <cls>PlaybackException</cls>) {
+        errorHandler.<fn>handle</fn>(error)
+    }
+})`,
+      changes: [
+        { text: 'DefaultRenderersFactory constructor changed', from: 'DefaultRenderersFactory(context)', to: 'Media3 uses same constructor — direct drop-in' },
+        { text: 'setExtensionRendererMode API identical in Media3' },
+        { text: 'Package rename', from: 'com.google.android.exoplayer2', to: 'androidx.media3' },
+        { text: 'PlaybackException error codes may differ — map any code-specific error handling' },
+        { text: 'Player.Listener method signatures unchanged structurally' },
+      ],
+      cofPattern: `<cm>// DefaultVideoPlayerView.kt (dispatcher)</cm>
+<kw>fun</kw> <fn>create</fn>(context: <cls>Context</cls>, cofConfig: <cls>CofConfig</cls>): <cls>IVideoPlayerView</cls> =
+    <kw>if</kw> (cofConfig.snapDevicesUseMedia3Video) {
+        <cls>DefaultVideoPlayerViewMedia3</cls>(context)
+    } <kw>else</kw> {
+        <cls>DefaultVideoPlayerViewExoV2_16</cls>(context)
+    }`,
+      testing: [
+        'Enable `snap_devices_use_media3_video` COF flag',
+        'Connect Snap Spectacles or drone device and open video preview',
+        'Verify extension renderer mode activates correct decoder (check logcat)',
+        'Confirm decoder fallback works when primary renderer fails',
+        'Validate progress tracking events fire at correct intervals',
+      ],
+    },
+    {
+      id: 'messaging-voice-notes',
+      name: 'Messaging Voice Notes',
+      file: 'components/messaging/chat/.../DefaultAudioPlaybackSessionImpl.kt',
+      hasV216: true,
+      source: 'RENAME',
+      renameFrom: 'DefaultAudioPlaybackSessionImpl.kt',
+      cof: 'messaging_use_media3_voice_note',
+      complexity: 'Moderate',
+      description: 'Voice note audio in chat. Audio focus management, variable playback speed, seek support, error recovery, and codec leasing.',
+      currentUsage: `<cm>// DefaultAudioPlaybackSessionImplExoV2_16.kt</cm>
+player = <cls>ExoPlayer</cls>.<cls>Builder</cls>(context).<fn>build</fn>()
+
+player.<fn>addListener</fn>(<kw>object</kw> : <cls>Player</cls>.<cls>Listener</cls> {
+    <kw>override fun</kw> <fn>onPlaybackStateChanged</fn>(state: <cls>Int</cls>) {
+        <kw>if</kw> (state == <cls>Player</cls>.STATE_ENDED) session.<fn>onComplete</fn>()
+    }
+    <kw>override fun</kw> <fn>onPlayerError</fn>(error: <cls>PlaybackException</cls>) {
+        <kw>when</kw> (error.errorCode) {
+            <cls>PlaybackException</cls>.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ->
+                session.<fn>onNetworkError</fn>()
+            <kw>else</kw> -> session.<fn>onUnknownError</fn>(error)
+        }
+    }
+})
+
+<kw>val</kw> mediaSource = <cls>ProgressiveMediaSource</cls>.<cls>Factory</cls>(
+    <cls>DefaultDataSourceFactory</cls>(context),
+    <cls>Mp4Extractor</cls>.<cls>Factory</cls>()
+).<fn>createMediaSource</fn>(<cls>MediaItem</cls>.<fn>fromUri</fn>(voiceNoteUri))`,
+      changes: [
+        { text: 'Package rename', from: 'com.google.android.exoplayer2', to: 'androidx.media3' },
+        { text: 'PlaybackException error codes may differ — audit ERROR_CODE_IO_* constants in Media3 for equivalents' },
+        { text: 'Mp4Extractor package moved', from: 'com.google.android.exoplayer2.extractor.mp4.Mp4Extractor', to: 'androidx.media3.extractor.mp4.Mp4Extractor' },
+        { text: 'DataSource factory rename', from: 'DefaultDataSourceFactory(context)', to: 'DefaultDataSource.Factory(context)' },
+        { text: 'Player.Listener callbacks structurally identical — direct port after import fix' },
+      ],
+      cofPattern: `<cm>// DefaultAudioPlaybackSessionFactory.kt</cm>
+<kw>fun</kw> <fn>create</fn>(
+    context: <cls>Context</cls>,
+    cofConfig: <cls>CofConfig</cls>
+): <cls>AudioPlaybackSession</cls> =
+    <kw>if</kw> (cofConfig.messagingUseMedia3VoiceNote) {
+        <cls>DefaultAudioPlaybackSessionImplMedia3</cls>(context)
+    } <kw>else</kw> {
+        <cls>DefaultAudioPlaybackSessionImplExoV2_16</cls>(context)
+    }`,
+      testing: [
+        'Enable `messaging_use_media3_voice_note` COF flag',
+        'Send and receive voice notes in a test chat',
+        'Verify playback speed controls (0.5x, 1x, 1.5x, 2x) work correctly',
+        'Seek mid-playback and confirm position accuracy',
+        'Simulate network interruption and verify error recovery flow',
+        'Confirm audio focus is correctly acquired and released',
+      ],
+    },
+  ];
+
+  function complexityClass(c) {
+    return c === 'Simple' ? 'badge-simple' : c === 'Moderate' ? 'badge-moderate' : 'badge-high';
+  }
+
+  function renderChange(ch) {
+    if (ch.from && ch.to) {
+      return `<li>${ch.text}: <span class="change-from">${ch.from}</span> → <span class="change-to">${ch.to}</span></li>`;
+    }
+    return `<li>${ch.text}</li>`;
+  }
+
+  function renderTestingSteps(steps) {
+    return steps.map((s, i) =>
+      `<div class="testing-step">
+        <span class="testing-step-num">${i + 1}</span>
+        <span>${s}</span>
+      </div>`
+    ).join('');
+  }
+
+  function buildCard(card, idx) {
+    const v2Badge = card.hasV216
+      ? `<span class="badge badge-v2-yes">V2_16 ✓</span>`
+      : `<span class="badge badge-v2-no">No V2_16</span>`;
+
+    const srcBadge = card.source === 'CREATE'
+      ? `<span class="badge badge-create">CREATE</span>`
+      : `<span class="badge badge-rename">RENAME</span>`;
+
+    const renameNote = card.renameFrom
+      ? `<p class="cof-pattern-note">Rename from: <code style="font-size:10px;color:#bc8cff;">${card.renameFrom}</code></p>`
+      : '';
+
+    const fileShort = card.file.length > 52
+      ? '…' + card.file.slice(card.file.length - 49)
+      : card.file;
+
+    return `
+    <div class="consumer-card" id="card-${card.id}" data-card-idx="${idx}">
+      <div class="consumer-card-header">
+        <div class="consumer-card-title-block">
+          <div class="consumer-card-title">${card.name}</div>
+          <div class="consumer-card-file" title="${card.file}">${fileShort}</div>
+        </div>
+        <div class="consumer-expand-icon">
+          <svg viewBox="0 0 16 16"><polyline points="4 6 8 10 12 6"/></svg>
+        </div>
+      </div>
+
+      <div class="consumer-badges">
+        ${v2Badge}
+        ${srcBadge}
+        <span class="badge ${complexityClass(card.complexity)}">${card.complexity}</span>
+      </div>
+
+      <div class="consumer-cof">
+        <span class="consumer-cof-label">COF</span>
+        <span class="consumer-cof-value">${card.cof}</span>
+      </div>
+
+      <div class="consumer-desc">${card.description}</div>
+
+      <div class="consumer-detail" id="detail-${card.id}">
+        <div class="detail-tabs" id="tabs-${card.id}">
+          <button class="detail-tab-btn active" data-panel="usage-${card.id}">Current Usage</button>
+          <button class="detail-tab-btn" data-panel="changes-${card.id}">Media3 Changes</button>
+          <button class="detail-tab-btn" data-panel="cof-${card.id}">COF Pattern</button>
+          <button class="detail-tab-btn" data-panel="testing-${card.id}">Testing</button>
+        </div>
+
+        <div class="detail-panel active" id="usage-${card.id}">
+          <p class="detail-section-title">Current ExoPlayer Usage</p>
+          <pre class="detail-code">${card.currentUsage}</pre>
+          ${renameNote}
+        </div>
+
+        <div class="detail-panel" id="changes-${card.id}">
+          <p class="detail-section-title">Required Media3 Changes</p>
+          <ul class="detail-changes">
+            ${card.changes.map(renderChange).join('')}
+          </ul>
+        </div>
+
+        <div class="detail-panel" id="cof-${card.id}">
+          <p class="detail-section-title">COF Integration Pattern</p>
+          <pre class="detail-code">${card.cofPattern}</pre>
+        </div>
+
+        <div class="detail-panel" id="testing-${card.id}">
+          <p class="detail-section-title">Testing Approach</p>
+          <div class="testing-steps">
+            ${renderTestingSteps(card.testing)}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function init() {
+    const grid = document.getElementById('consumers-grid');
+    if (!grid) return;
+    grid.innerHTML = CARDS.map(buildCard).join('');
+
+    // Card click — toggle expanded
+    grid.addEventListener('click', function(e) {
+      const card = e.target.closest('.consumer-card');
+      if (!card) return;
+
+      // If click is on a detail-tab-btn, handle separately
+      const tabBtn = e.target.closest('.detail-tab-btn');
+      if (tabBtn) {
+        handleTabClick(tabBtn, card);
+        return;
+      }
+
+      // Toggle card expansion
+      const isExpanded = card.classList.contains('expanded');
+      // Collapse all others
+      document.querySelectorAll('#consumers-grid .consumer-card.expanded').forEach(function(c) {
+        if (c !== card) c.classList.remove('expanded');
+      });
+      card.classList.toggle('expanded', !isExpanded);
+    });
+  }
+
+  function handleTabClick(btn, card) {
+    const panelId = btn.getAttribute('data-panel');
+    const tabsContainer = btn.closest('.detail-tabs');
+    const detailContainer = card.querySelector('.consumer-detail');
+
+    // Deactivate all tab buttons in this card
+    tabsContainer.querySelectorAll('.detail-tab-btn').forEach(function(b) {
+      b.classList.remove('active');
+    });
+    btn.classList.add('active');
+
+    // Deactivate all panels in this card
+    detailContainer.querySelectorAll('.detail-panel').forEach(function(p) {
+      p.classList.remove('active');
+    });
+    const target = document.getElementById(panelId);
+    if (target) target.classList.add('active');
+  }
+
+  // Init when DOM ready (handle both embedded and standalone usage)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+
+</div>
+<!-- End Tab 2: Ad-hoc ExoPlayer Consumers -->
+
+
+<div id="tab-breaking" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace; background: #0d1117; color: #e6edf3; min-height: 100vh; padding: 0;">
+
+<style>
+  #tab-breaking * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  #tab-breaking .bc-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    height: 100%;
+  }
+
+  /* ── Filter Bar ── */
+  #tab-breaking .bc-filter-bar {
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    padding: 14px 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  #tab-breaking .bc-search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 180px;
+  }
+
+  #tab-breaking .bc-search-wrap svg {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8b949e;
+    pointer-events: none;
+  }
+
+  #tab-breaking .bc-search {
+    width: 100%;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #e6edf3;
+    font-size: 13px;
+    padding: 7px 10px 7px 32px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  #tab-breaking .bc-search:focus { border-color: #58a6ff; }
+  #tab-breaking .bc-search::placeholder { color: #8b949e; }
+
+  #tab-breaking .bc-select {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #e6edf3;
+    font-size: 13px;
+    padding: 7px 28px 7px 10px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238b949e' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    transition: border-color 0.15s;
+  }
+
+  #tab-breaking .bc-select:focus { border-color: #58a6ff; }
+
+  #tab-breaking .bc-filter-count {
+    font-size: 12px;
+    color: #8b949e;
+    white-space: nowrap;
+    padding: 0 4px;
+  }
+
+  #tab-breaking .bc-filter-count span {
+    color: #58a6ff;
+    font-weight: 600;
+  }
+
+  /* ── Body Layout ── */
+  #tab-breaking .bc-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 700px;
+  }
+
+  /* ── Timeline Sidebar ── */
+  #tab-breaking .bc-timeline {
+    width: 130px;
+    min-width: 130px;
+    background: #161b22;
+    border-right: 1px solid #30363d;
+    padding: 24px 0;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  #tab-breaking .bc-timeline-inner {
+    position: relative;
+    padding: 0 16px;
+  }
+
+  #tab-breaking .bc-timeline-line {
+    position: absolute;
+    left: 38px;
+    top: 12px;
+    bottom: 12px;
+    width: 2px;
+    background: linear-gradient(to bottom, #30363d 0%, #58a6ff 40%, #bc8cff 70%, #3fb950 100%);
+  }
+
+  #tab-breaking .bc-ver-node {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-bottom: 0;
+    cursor: pointer;
+    z-index: 1;
+  }
+
+  #tab-breaking .bc-ver-node:not(:last-child) {
+    margin-bottom: 32px;
+  }
+
+  #tab-breaking .bc-ver-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid #30363d;
+    background: #161b22;
+    flex-shrink: 0;
+    margin-right: 10px;
+    transition: all 0.2s;
+    position: relative;
+    z-index: 2;
+  }
+
+  #tab-breaking .bc-ver-node.active .bc-ver-dot,
+  #tab-breaking .bc-ver-node:hover .bc-ver-dot {
+    border-color: #58a6ff;
+    background: #58a6ff;
+    box-shadow: 0 0 0 3px rgba(88,166,255,0.2);
+  }
+
+  #tab-breaking .bc-ver-node[data-special="m3"] .bc-ver-dot {
+    border-color: #3fb950;
+  }
+
+  #tab-breaking .bc-ver-node[data-special="m3"].active .bc-ver-dot,
+  #tab-breaking .bc-ver-node[data-special="m3"]:hover .bc-ver-dot {
+    border-color: #3fb950;
+    background: #3fb950;
+    box-shadow: 0 0 0 3px rgba(63,185,80,0.2);
+  }
+
+  #tab-breaking .bc-ver-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8b949e;
+    transition: color 0.2s;
+    line-height: 1.3;
+  }
+
+  #tab-breaking .bc-ver-node.active .bc-ver-label,
+  #tab-breaking .bc-ver-node:hover .bc-ver-label {
+    color: #58a6ff;
+  }
+
+  #tab-breaking .bc-ver-node[data-special="m3"].active .bc-ver-label,
+  #tab-breaking .bc-ver-node[data-special="m3"]:hover .bc-ver-label {
+    color: #3fb950;
+  }
+
+  #tab-breaking .bc-ver-sub {
+    font-size: 9px;
+    color: #8b949e;
+    font-weight: 400;
+    margin-top: 2px;
+    display: block;
+  }
+
+  #tab-breaking .bc-ver-badge {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #1c2333;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    font-size: 9px;
+    color: #8b949e;
+    padding: 1px 5px;
+    min-width: 18px;
+    text-align: center;
+  }
+
+  /* ── Main Cards Area ── */
+  #tab-breaking .bc-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #tab-breaking .bc-empty {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: #8b949e;
+    gap: 12px;
+  }
+
+  #tab-breaking .bc-empty.visible { display: flex; }
+
+  #tab-breaking .bc-empty svg { opacity: 0.4; }
+
+  #tab-breaking .bc-empty-text {
+    font-size: 14px;
+    color: #8b949e;
+  }
+
+  /* ── Step Card ── */
+  #tab-breaking .bc-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+
+  #tab-breaking .bc-card:hover {
+    border-color: #444c56;
+  }
+
+  #tab-breaking .bc-card.highlighted {
+    border-color: #58a6ff;
+    box-shadow: 0 0 0 1px rgba(88,166,255,0.15);
+  }
+
+  #tab-breaking .bc-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+
+  #tab-breaking .bc-card-header:hover {
+    background: #1c2333;
+  }
+
+  #tab-breaking .bc-step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #1c2333;
+    border: 1px solid #30363d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #8b949e;
+    flex-shrink: 0;
+  }
+
+  #tab-breaking .bc-card.open .bc-step-num {
+    background: #58a6ff;
+    border-color: #58a6ff;
+    color: #0d1117;
+  }
+
+  #tab-breaking .bc-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e6edf3;
+    flex: 1;
+  }
+
+  #tab-breaking .bc-header-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  #tab-breaking .bc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  #tab-breaking .bc-badge.effort-mechanical {
+    background: rgba(88,166,255,0.15);
+    color: #58a6ff;
+    border: 1px solid rgba(88,166,255,0.3);
+  }
+
+  #tab-breaking .bc-badge.effort-adaptation {
+    background: rgba(210,153,34,0.15);
+    color: #d29922;
+    border: 1px solid rgba(210,153,34,0.3);
+  }
+
+  #tab-breaking .bc-badge.effort-rewrite {
+    background: rgba(248,81,73,0.15);
+    color: #f85149;
+    border: 1px solid rgba(248,81,73,0.3);
+  }
+
+  #tab-breaking .bc-badge.version {
+    background: rgba(188,140,255,0.1);
+    color: #bc8cff;
+    border: 1px solid rgba(188,140,255,0.25);
+    font-size: 10px;
+    font-weight: 500;
+  }
+
+  #tab-breaking .bc-badge.files {
+    background: rgba(63,185,80,0.1);
+    color: #3fb950;
+    border: 1px solid rgba(63,185,80,0.25);
+    font-size: 10px;
+  }
+
+  #tab-breaking .bc-chevron {
+    color: #8b949e;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+
+  #tab-breaking .bc-card.open .bc-chevron {
+    transform: rotate(90deg);
+  }
+
+  /* ── Card Body ── */
+  #tab-breaking .bc-card-body {
+    display: none;
+    border-top: 1px solid #30363d;
+    padding: 16px;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  #tab-breaking .bc-card.open .bc-card-body {
+    display: flex;
+  }
+
+  #tab-breaking .bc-description {
+    font-size: 13px;
+    color: #8b949e;
+    line-height: 1.6;
+  }
+
+  /* ── Code Sections ── */
+  #tab-breaking .bc-code-section {
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #30363d;
+  }
+
+  #tab-breaking .bc-code-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  #tab-breaking .bc-code-label.before {
+    background: rgba(248,81,73,0.1);
+    color: #f85149;
+    border-bottom: 1px solid rgba(248,81,73,0.2);
+  }
+
+  #tab-breaking .bc-code-label.after {
+    background: rgba(63,185,80,0.1);
+    color: #3fb950;
+    border-bottom: 1px solid rgba(63,185,80,0.2);
+  }
+
+  #tab-breaking .bc-code-label.neutral {
+    background: rgba(88,166,255,0.08);
+    color: #58a6ff;
+    border-bottom: 1px solid rgba(88,166,255,0.15);
+  }
+
+  #tab-breaking .bc-code-label svg {
+    flex-shrink: 0;
+  }
+
+  #tab-breaking .bc-code-block {
+    background: #0d1117;
+    padding: 12px 14px;
+    font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', monospace;
+    font-size: 12px;
+    line-height: 1.65;
+    overflow-x: auto;
+    color: #e6edf3;
+    white-space: pre;
+  }
+
+  /* ── Mapping Table ── */
+  #tab-breaking .bc-mapping-table {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  #tab-breaking .bc-map-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    padding: 7px 12px;
+    background: #1c2333;
+    border-bottom: 1px solid #30363d;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8b949e;
+  }
+
+  #tab-breaking .bc-map-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    padding: 5px 12px;
+    align-items: center;
+    border-bottom: 1px solid rgba(48,54,61,0.5);
+    transition: background 0.1s;
+  }
+
+  #tab-breaking .bc-map-row:last-child { border-bottom: none; }
+  #tab-breaking .bc-map-row:hover { background: rgba(88,166,255,0.04); }
+
+  #tab-breaking .bc-map-from {
+    font-family: monospace;
+    font-size: 11px;
+    color: #f85149;
+    word-break: break-all;
+  }
+
+  #tab-breaking .bc-map-arrow {
+    color: #8b949e;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  #tab-breaking .bc-map-to {
+    font-family: monospace;
+    font-size: 11px;
+    color: #3fb950;
+    word-break: break-all;
+  }
+
+  /* ── Changes List ── */
+  #tab-breaking .bc-changes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  #tab-breaking .bc-change-item {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  #tab-breaking .bc-change-num {
+    font-size: 10px;
+    font-weight: 700;
+    color: #58a6ff;
+    background: rgba(88,166,255,0.1);
+    border: 1px solid rgba(88,166,255,0.25);
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  #tab-breaking .bc-change-text {
+    color: #8b949e;
+    line-height: 1.5;
+    flex: 1;
+  }
+
+  #tab-breaking .bc-change-text code {
+    font-family: monospace;
+    font-size: 11px;
+    background: #1c2333;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #bc8cff;
+  }
+
+  #tab-breaking .bc-impact-box {
+    background: rgba(248,81,73,0.08);
+    border: 1px solid rgba(248,81,73,0.2);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #f85149;
+    line-height: 1.6;
+  }
+
+  #tab-breaking .bc-impact-box strong {
+    font-weight: 700;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  #tab-breaking .bc-code-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  @media (max-width: 700px) {
+    #tab-breaking .bc-code-pair {
+      grid-template-columns: 1fr;
+    }
+    #tab-breaking .bc-header-meta { display: none; }
+    #tab-breaking .bc-timeline { width: 90px; min-width: 90px; }
+  }
+
+  /* ── Scrollbar ── */
+  #tab-breaking .bc-main::-webkit-scrollbar,
+  #tab-breaking .bc-timeline::-webkit-scrollbar { width: 6px; }
+  #tab-breaking .bc-main::-webkit-scrollbar-track,
+  #tab-breaking .bc-timeline::-webkit-scrollbar-track { background: #0d1117; }
+  #tab-breaking .bc-main::-webkit-scrollbar-thumb,
+  #tab-breaking .bc-timeline::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+  /* ── Syntax Highlight ── */
+  #tab-breaking .tok-kw { color: #ff7b72; }
+  #tab-breaking .tok-fn { color: #d2a8ff; }
+  #tab-breaking .tok-str { color: #a5d6ff; }
+  #tab-breaking .tok-cm { color: #8b949e; font-style: italic; }
+  #tab-breaking .tok-type { color: #ffa657; }
+  #tab-breaking .tok-pkg { color: #79c0ff; }
+  #tab-breaking .tok-punc { color: #8b949e; }
+</style>
+
+<div class="bc-container">
+
+  <!-- Filter Bar -->
+  <div class="bc-filter-bar">
+    <div class="bc-search-wrap">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.75.75 0 1 1-1.06 1.06Zm-1.096-3.132a.75.75 0 0 0-.218.218 4.5 4.5 0 1 1 .218-.218Z"/>
+      </svg>
+      <input class="bc-search" id="bc-search" type="text" placeholder="Search steps, APIs, classes…">
+    </div>
+    <select class="bc-select" id="bc-effort-filter">
+      <option value="all">All Effort Levels</option>
+      <option value="mechanical">Mechanical</option>
+      <option value="adaptation">Adaptation</option>
+      <option value="rewrite">Rewrite</option>
+    </select>
+    <select class="bc-select" id="bc-version-filter">
+      <option value="all">All Versions</option>
+      <option value="2.16">2.16</option>
+      <option value="2.17">2.17</option>
+      <option value="2.18">2.18</option>
+      <option value="2.19">2.19</option>
+      <option value="m3-1.0">M3 1.0</option>
+      <option value="m3-1.4">M3 1.4</option>
+      <option value="m3-1.5">M3 1.5</option>
+    </select>
+    <div class="bc-filter-count" id="bc-count"><span id="bc-count-num">12</span> / 12 steps</div>
+  </div>
+
+  <!-- Body -->
+  <div class="bc-body">
+
+    <!-- Timeline Sidebar -->
+    <div class="bc-timeline">
+      <div class="bc-timeline-inner">
+        <div class="bc-timeline-line"></div>
+
+        <div class="bc-ver-node" data-ver="2.16" onclick="bcFilterVersion('2.16', this)">
+          <div class="bc-ver-dot"></div>
+          <div>
+            <div class="bc-ver-label">2.16</div>
+            <span class="bc-ver-sub">ExoPlayer</span>
+          </div>
+        </div>
+
+        <div class="bc-ver-node" data-ver="2.17" onclick="bcFilterVersion('2.17', this)">
+          <div class="bc-ver-dot"></div>
+          <div>
+            <div class="bc-ver-label">2.17</div>
+            <span class="bc-ver-sub">IntDef fix</span>
+          </div>
+        </div>
+
+        <div class="bc-ver-node" data-ver="2.18" onclick="bcFilterVersion('2.18', this)">
+          <div class="bc-ver-dot"></div>
+          <div>
+            <div class="bc-ver-label">2.18</div>
+            <span class="bc-ver-sub">Renames</span>
+          </div>
+        </div>
+
+        <div class="bc-ver-node" data-ver="2.19" onclick="bcFilterVersion('2.19', this)">
+          <div class="bc-ver-dot"></div>
+          <div>
+            <div class="bc-ver-label">2.19</div>
+            <span class="bc-ver-sub">Format API</span>
+          </div>
+        </div>
+
+        <div class="bc-ver-node" data-ver="m3-1.0" data-special="m3" onclick="bcFilterVersion('m3-1.0', this)">
+          <div class="bc-ver-dot"></div>
+          <div>
+            <div class="bc-ver-label">M3 1.0</div>
+            <span class="bc-ver-sub">Media3 GA</span>
+          </div>
+        </div>
+
+        <div class="bc-ver-node" data-ver="m3-1.4" data-special="m3" onclick="bcFilterVersion('m3-1.4', this)">
+          <div class="bc-ver-dot"></div>
+          <div>
+            <div class="bc-ver-label">M3 1.4</div>
+            <span class="bc-ver-sub">DataSpec</span>
+          </div>
+        </div>
+
+        <div class="bc-ver-node" data-ver="m3-1.5" data-special="m3" onclick="bcFilterVersion('m3-1.5', this)">
+          <div class="bc-ver-dot"></div>
+          <div>
+            <div class="bc-ver-label">M3 1.5</div>
+            <span class="bc-ver-sub">Tracks API</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cards Main Area -->
+    <div class="bc-main" id="bc-cards-container">
+
+      <!-- STEP 1 -->
+      <div class="bc-card" data-step="1" data-effort="mechanical" data-versions="all 2.16 2.17 2.18 2.19 m3-1.0 m3-1.4 m3-1.5" data-search="package rename exoplayer androidx media3 import datasource format player">
+        <div class="bc-card-header" onclick="bcToggle(this)">
+          <div class="bc-step-num">1</div>
+          <div class="bc-card-title">Package Rename</div>
+          <div class="bc-header-meta">
+            <span class="bc-badge version">All Versions</span>
+            <span class="bc-badge effort-mechanical">Mechanical</span>
+            <span class="bc-badge files">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688Z"/></svg>
+              152 files
+            </span>
+          </div>
+          <svg class="bc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.042-.018.749.749 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
+        </div>
+        <div class="bc-card-body">
+          <div class="bc-description">Replace all <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">v2_16.com.google.android.exoplayer2.*</code> import prefixes with <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">androidx.media3.*</code>. This is a pure mechanical find-and-replace. The Google migration tool automates most of this.</div>
+
+          <div class="bc-mapping-table">
+            <div class="bc-map-header">
+              <span>ExoPlayer 2.x</span>
+              <span></span>
+              <span>Media3</span>
+            </div>
+            <div class="bc-map-row"><div class="bc-map-from">…exoplayer2.ExoPlayer</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…exoplayer.ExoPlayer</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">…exoplayer2.Player</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…common.Player</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">…exoplayer2.Format</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…common.Format</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">…exoplayer2.C</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…common.C</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">…upstream.DataSource</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…datasource.DataSource</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">…upstream.DataSpec</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…datasource.DataSpec</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">…source.MediaSource</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…exoplayer.source.MediaSource</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">…exoplayer2.Renderer</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…exoplayer.Renderer</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">…trackselection.TrackSelector</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…exoplayer.trackselection.TrackSelector</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">…upstream.BandwidthMeter</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…exoplayer.upstream.BandwidthMeter</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">…upstream.cache.SimpleCache</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…datasource.cache.SimpleCache</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">…decoder.DecoderInputBuffer</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…decoder.DecoderInputBuffer</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">…audio.AudioSink</div><div class="bc-map-arrow">→</div><div class="bc-map-to">…exoplayer.audio.AudioSink</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2 -->
+      <div class="bc-card" data-step="2" data-effort="mechanical" data-versions="2.17" data-search="intdef annotation kotlin type use target content type">
+        <div class="bc-card-header" onclick="bcToggle(this)">
+          <div class="bc-step-num">2</div>
+          <div class="bc-card-title">IntDef Annotations</div>
+          <div class="bc-header-meta">
+            <span class="bc-badge version">2.17</span>
+            <span class="bc-badge effort-mechanical">Mechanical</span>
+            <span class="bc-badge files">~60 sites</span>
+          </div>
+          <svg class="bc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.042-.018.749.749 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
+        </div>
+        <div class="bc-card-body">
+          <div class="bc-description"><code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">@Target(TYPE_USE)</code> was added to IntDef annotations in 2.17. Kotlin code using these as parameter-position type annotations may encounter compile warnings. In Media3 the annotations are already correctly scoped — this resolves itself after migration.</div>
+
+          <div class="bc-code-pair">
+            <div class="bc-code-section">
+              <div class="bc-code-label before">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0 13 0Z"/></svg>
+                ExoPlayer 2.17 (warning)
+              </div>
+              <div class="bc-code-block"><span class="tok-cm">// Kotlin annotation site</span>
+<span class="tok-kw">@</span><span class="tok-type">C.ContentType</span> <span class="tok-kw">val</span> type: <span class="tok-type">Int</span></div>
+            </div>
+            <div class="bc-code-section">
+              <div class="bc-code-label after">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>
+                Media3 (resolved)
+              </div>
+              <div class="bc-code-block"><span class="tok-cm">// Works as-is — annotations</span>
+<span class="tok-cm">// updated to correct targets</span>
+<span class="tok-kw">val</span> type: <span class="tok-kw">@</span><span class="tok-type">C.ContentType</span> <span class="tok-type">Int</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3 -->
+      <div class="bc-card" data-step="3" data-effort="mechanical" data-versions="2.17 2.18" data-search="class renames dummysurface placeholdersurface eventlistener listener mediacodecinfo seamless adaptation">
+        <div class="bc-card-header" onclick="bcToggle(this)">
+          <div class="bc-step-num">3</div>
+          <div class="bc-card-title">Class Renames</div>
+          <div class="bc-header-meta">
+            <span class="bc-badge version">2.17–2.18</span>
+            <span class="bc-badge effort-mechanical">Mechanical</span>
+            <span class="bc-badge files">~20 files</span>
+          </div>
+          <svg class="bc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.042-.018.749.749 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
+        </div>
+        <div class="bc-card-body">
+          <div class="bc-description">Several classes were renamed for clarity between 2.17 and 2.18. These are straightforward textual renames with no behavioral changes.</div>
+          <div class="bc-mapping-table">
+            <div class="bc-map-header"><span>Old Name</span><span></span><span>New Name</span></div>
+            <div class="bc-map-row"><div class="bc-map-from">DummySurface</div><div class="bc-map-arrow">→</div><div class="bc-map-to">PlaceholderSurface</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">Player.EventListener</div><div class="bc-map-arrow">→</div><div class="bc-map-to">Player.Listener</div></div>
+            <div class="bc-map-row"><div class="bc-map-from">MediaCodecInfo.isSeamlessAdaptationSupported()</div><div class="bc-map-arrow">→</div><div class="bc-map-to">isSeamlessAdaptationSupported(Format, Format)</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 4 -->
+      <div class="bc-card" data-step="4" data-effort="adaptation" data-versions="2.17 2.18 2.19" data-search="constructor builder defaultrenderersfactory defaulttrackselector defaultaudiosink defaultbandwidthmeter simplecache">
+        <div class="bc-card-header" onclick="bcToggle(this)">
+          <div class="bc-step-num">4</div>
+          <div class="bc-card-title">Constructor → Builder Pattern</div>
+          <div class="bc-header-meta">
+            <span class="bc-badge version">2.17–2.19</span>
+            <span class="bc-badge effort-adaptation">Adaptation</span>
+            <span class="bc-badge files">~15 files</span>
+          </div>
+          <svg class="bc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.042-.018.749.749 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
+        </div>
+        <div class="bc-card-body">
+          <div class="bc-description">Multi-argument constructors were removed across several core classes in favor of the Builder pattern. Each class now exposes a typed builder with explicit setter methods, improving discoverability and future extensibility.</div>
+
+          <div class="bc-changes-list">
+            <div class="bc-change-item">
+              <div class="bc-change-num">1</div>
+              <div class="bc-change-text"><code>DefaultRenderersFactory(context, decoderExtensionMode)</code> → <code>DefaultRenderersFactory(context).setExtensionRendererMode(mode)</code></div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">2</div>
+              <div class="bc-change-text"><code>DefaultTrackSelector(context, adaptiveFactory)</code> → <code>DefaultTrackSelector(context)</code> — factory configured via Parameters</div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">3</div>
+              <div class="bc-change-text"><code>DefaultAudioSink(capabilities, processors)</code> → <code>DefaultAudioSink.Builder(context).setAudioProcessors(processors).build()</code></div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">4</div>
+              <div class="bc-change-text"><code>DefaultBandwidthMeter(context)</code> → <code>DefaultBandwidthMeter.Builder(context).build()</code></div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">5</div>
+              <div class="bc-change-text"><code>SimpleCache(dir, evictor)</code> → <code>SimpleCache(dir, evictor, StandaloneDatabaseProvider(context))</code> — DB provider now required</div>
+            </div>
+          </div>
+
+          <div class="bc-code-section">
+            <div class="bc-code-label before">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0 13 0Z"/></svg>
+              Before
+            </div>
+            <div class="bc-code-block"><span class="tok-kw">val</span> factory = <span class="tok-type">DefaultRenderersFactory</span>(context, <span class="tok-type">EXTENSION_RENDERER_MODE_ON</span>)
+<span class="tok-kw">val</span> trackSelector = <span class="tok-type">DefaultTrackSelector</span>(context, <span class="tok-type">AdaptiveTrackSelection.Factory</span>())
+<span class="tok-kw">val</span> audioSink = <span class="tok-type">DefaultAudioSink</span>(capabilities, arrayOf(processor))</div>
+          </div>
+          <div class="bc-code-section">
+            <div class="bc-code-label after">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>
+              After
+            </div>
+            <div class="bc-code-block"><span class="tok-kw">val</span> factory = <span class="tok-type">DefaultRenderersFactory</span>(context)
+    .<span class="tok-fn">setExtensionRendererMode</span>(<span class="tok-type">EXTENSION_RENDERER_MODE_ON</span>)
+<span class="tok-kw">val</span> trackSelector = <span class="tok-type">DefaultTrackSelector</span>(context)
+<span class="tok-kw">val</span> audioSink = <span class="tok-type">DefaultAudioSink.Builder</span>(context)
+    .<span class="tok-fn">setAudioProcessors</span>(arrayOf(processor))
+    .<span class="tok-fn">build</span>()</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 5 -->
+      <div class="bc-card" data-step="5" data-effort="adaptation" data-versions="2.19" data-search="format api builder buildUpon create copy copywith bitrate mimetype video sample">
+        <div class="bc-card-header" onclick="bcToggle(this)">
+          <div class="bc-step-num">5</div>
+          <div class="bc-card-title">Format API → Builder</div>
+          <div class="bc-header-meta">
+            <span class="bc-badge version">2.19</span>
+            <span class="bc-badge effort-adaptation">Adaptation</span>
+            <span class="bc-badge files">~30 files</span>
+          </div>
+          <svg class="bc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.042-.018.749.749 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
+        </div>
+        <div class="bc-card-body">
+          <div class="bc-description">All <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">Format.create*()</code> static factory methods and <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">Format.copyWith*()</code> mutation helpers were removed. Use <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">Format.Builder</code> for construction and <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">format.buildUpon()</code> for derived formats.</div>
+
+          <div class="bc-code-pair">
+            <div class="bc-code-section">
+              <div class="bc-code-label before">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0 13 0Z"/></svg>
+                Before
+              </div>
+              <div class="bc-code-block"><span class="tok-kw">val</span> format = <span class="tok-type">Format</span>.<span class="tok-fn">createVideoSampleFormat</span>(
+    id, mimeType, <span class="tok-kw">null</span>, bitrate, <span class="tok-cm">/*…*/</span>)
+<span class="tok-kw">val</span> newFormat = format
+    .<span class="tok-fn">copyWithMaxInputSize</span>(maxSize)</div>
+            </div>
+            <div class="bc-code-section">
+              <div class="bc-code-label after">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>
+                After
+              </div>
+              <div class="bc-code-block"><span class="tok-kw">val</span> format = <span class="tok-type">Format.Builder</span>()
+    .<span class="tok-fn">setId</span>(id)
+    .<span class="tok-fn">setSampleMimeType</span>(mimeType)
+    .<span class="tok-fn">setAverageBitrate</span>(bitrate)
+    .<span class="tok-fn">build</span>()
+<span class="tok-kw">val</span> newFormat = format.<span class="tok-fn">buildUpon</span>()
+    .<span class="tok-fn">setMaxInputSize</span>(maxSize).<span class="tok-fn">build</span>()</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 6 -->
+      <div class="bc-card" data-step="6" data-effort="adaptation" data-versions="m3-1.4" data-search="dataspec builder uri position length key constructor">
+        <div class="bc-card-header" onclick="bcToggle(this)">
+          <div class="bc-step-num">6</div>
+          <div class="bc-card-title">DataSpec → Builder</div>
+          <div class="bc-header-meta">
+            <span class="bc-badge version">M3 1.4</span>
+            <span class="bc-badge effort-adaptation">Adaptation</span>
+            <span class="bc-badge files">~12 files</span>
+          </div>
+          <svg class="bc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.042-.018.749.749 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
+        </div>
+        <div class="bc-card-body">
+          <div class="bc-description">All positional <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">DataSpec</code> constructors were removed in M3 1.4. Replace every construction site with <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">DataSpec.Builder</code>. Explicit setter names eliminate silent parameter ordering bugs.</div>
+
+          <div class="bc-code-pair">
+            <div class="bc-code-section">
+              <div class="bc-code-label before">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0 13 0Z"/></svg>
+                Before
+              </div>
+              <div class="bc-code-block"><span class="tok-type">DataSpec</span>(uri, absoluteStreamPosition,
+     length, key)</div>
+            </div>
+            <div class="bc-code-section">
+              <div class="bc-code-label after">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>
+                After
+              </div>
+              <div class="bc-code-block"><span class="tok-type">DataSpec.Builder</span>()
+    .<span class="tok-fn">setUri</span>(uri)
+    .<span class="tok-fn">setPosition</span>(absoluteStreamPosition)
+    .<span class="tok-fn">setLength</span>(length)
+    .<span class="tok-fn">setKey</span>(key)
+    .<span class="tok-fn">build</span>()</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 7 -->
+      <div class="bc-card" data-step="7" data-effort="rewrite" data-versions="2.18 2.19 m3-1.5" data-search="trackgrouparray tracks deprecated removed cachebasedtrackselector adaptivetrackselection rewrite group override">
+        <div class="bc-card-header" onclick="bcToggle(this)">
+          <div class="bc-step-num">7</div>
+          <div class="bc-card-title">TrackGroupArray → Tracks API</div>
+          <div class="bc-header-meta">
+            <span class="bc-badge version">2.18 → M3 1.5</span>
+            <span class="bc-badge effort-rewrite">Rewrite</span>
+            <span class="bc-badge files">3–5 files</span>
+          </div>
+          <svg class="bc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.042-.018.749.749 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
+        </div>
+        <div class="bc-card-body">
+          <div class="bc-description"><code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">TrackGroupArray</code> was deprecated in 2.18 and fully removed in M3 1.5. The replacement <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">Tracks</code> API represents a fundamentally different data model. This is not a rename — it requires rethinking iteration, selection, and overrides.</div>
+
+          <div class="bc-impact-box">
+            <strong>High Impact: Full Rewrite Required</strong>
+            CacheBasedTrackSelector and CacheBasedAdaptiveTrackSelection require complete rewrites. The entire track selection contract — method signatures, iteration logic, and override mechanisms — has changed.
+          </div>
+
+          <div class="bc-code-section">
+            <div class="bc-code-label before">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0 13 0Z"/></svg>
+              Before — Old TrackSelector contract
+            </div>
+            <div class="bc-code-block"><span class="tok-kw">override fun</span> <span class="tok-fn">selectTracks</span>(
+    rendererCapabilities: Array&lt;<span class="tok-type">RendererCapabilities</span>&gt;,
+    trackGroups: <span class="tok-type">TrackGroupArray</span>,         <span class="tok-cm">// removed</span>
+    periodId: <span class="tok-type">MediaSource.MediaPeriodId</span>,
+    timeline: <span class="tok-type">Timeline</span>
+): <span class="tok-type">TrackSelectorResult</span> {
+    <span class="tok-cm">// Iterate: for (i in 0 until trackGroups.length)</span>
+    <span class="tok-cm">// Access: trackGroups[i].getFormat(j)</span>
+}</div>
+          </div>
+          <div class="bc-code-section">
+            <div class="bc-code-label after">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>
+              After — New Tracks API
+            </div>
+            <div class="bc-code-block"><span class="tok-cm">// Tracks replaces TrackGroupArray</span>
+<span class="tok-cm">// Iterate via: tracks.getGroups()</span>
+<span class="tok-cm">// Access TrackGroup: group.getMediaTrackGroup()</span>
+<span class="tok-cm">// Apply selection: TrackSelectionOverride</span>
+<span class="tok-kw">val</span> groups: List&lt;<span class="tok-type">Tracks.Group</span>&gt; = tracks.<span class="tok-fn">getGroups</span>()
+<span class="tok-kw">for</span> (group <span class="tok-kw">in</span> groups) {
+    <span class="tok-kw">val</span> mediaGroup = group.<span class="tok-fn">getMediaTrackGroup</span>()
+    <span class="tok-cm">// check group.isTrackSupported(index)</span>
+}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 8 -->
+      <div class="bc-card" data-step="8" data-effort="adaptation" data-versions="2.19 m3-1.0 m3-1.5" data-search="loadcontrol shouldstartplayback shouldcontinueloading loadinginfo ontrackselected signature mediaperiod">
+        <div class="bc-card-header" onclick="bcToggle(this)">
+          <div class="bc-step-num">8</div>
+          <div class="bc-card-title">LoadControl Signatures</div>
+          <div class="bc-header-meta">
+            <span class="bc-badge version">2.19–M3 1.5</span>
+            <span class="bc-badge effort-adaptation">Adaptation</span>
+            <span class="bc-badge files">3–4 files</span>
+          </div>
+          <svg class="bc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.042-.018.749.749 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
+        </div>
+        <div class="bc-card-body">
+          <div class="bc-description">Four separate signature changes were made to the <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">LoadControl</code> interface across versions 2.19 through M3 1.5. Each must be tracked independently when migrating incrementally.</div>
+
+          <div class="bc-changes-list">
+            <div class="bc-change-item">
+              <div class="bc-change-num">1</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">2.19:</strong> <code>shouldStartPlayback(bufferedDurationUs, playbackSpeed, rebuffering)</code> gains a <code>MediaPeriod</code> parameter at the end</div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">2</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">M3 1.0:</strong> <code>shouldStartPlayback</code> individual params consolidated into a single <code>LoadingInfo</code> object</div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">3</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">M3 1.5:</strong> <code>onTracksSelected(renderers, trackGroups, trackSelections)</code> → <code>onTracksSelected(trackGroups, trackSelections)</code> — <code>Renderer[]</code> param removed</div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">4</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">M3 1.0:</strong> <code>shouldContinueLoading(bufferedDurationUs, playbackSpeed)</code> → uses <code>LoadingInfo</code> object</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 9 -->
+      <div class="bc-card" data-step="9" data-effort="adaptation" data-versions="2.19 m3-1.0 m3-1.4" data-search="renderer release messagequeue onstreamchanged formats startpositionus offsetus buffer isdecodonly lastresetposition">
+        <div class="bc-card-header" onclick="bcToggle(this)">
+          <div class="bc-step-num">9</div>
+          <div class="bc-card-title">Renderer Changes</div>
+          <div class="bc-header-meta">
+            <span class="bc-badge version">2.19–M3 1.4</span>
+            <span class="bc-badge effort-adaptation">Adaptation</span>
+            <span class="bc-badge files">~10 files</span>
+          </div>
+          <svg class="bc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.042-.018.749.749 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
+        </div>
+        <div class="bc-card-body">
+          <div class="bc-description">Three breaking changes to the <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">Renderer</code> interface spanning 2.19 to M3 1.4. The <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">Buffer.isDecodeOnly()</code> removal is the most subtle — it requires a behavioral workaround.</div>
+
+          <div class="bc-changes-list">
+            <div class="bc-change-item">
+              <div class="bc-change-num">1</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">2.19:</strong> <code>release()</code> → <code>release(MessageQueue)</code> — message queue now passed for async teardown coordination</div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">2</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">M3 1.0:</strong> <code>onStreamChanged(formats, startPositionUs)</code> → <code>onStreamChanged(formats, startPositionUs, offsetUs, MediaPeriodId)</code> — offset and period context added</div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">3</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">M3 1.4:</strong> <code>Buffer.isDecodeOnly()</code> removed — replace with: check <code>getLastResetPositionUs()</code> and compare against the buffer's presentation timestamp to determine whether to skip decode</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 10 -->
+      <div class="bc-card" data-step="10" data-effort="adaptation" data-versions="2.18 2.19 m3-1.0 m3-1.4" data-search="listener analytics onseekprocessed positiondiscontinuity ondecoderenabled onaudioenabled onvideoenabled oninputformatchanged decoderreusevaluation">
+        <div class="bc-card-header" onclick="bcToggle(this)">
+          <div class="bc-step-num">10</div>
+          <div class="bc-card-title">Listener / Analytics Changes</div>
+          <div class="bc-header-meta">
+            <span class="bc-badge version">2.18–M3 1.4</span>
+            <span class="bc-badge effort-adaptation">Adaptation</span>
+            <span class="bc-badge files">~8 files</span>
+          </div>
+          <svg class="bc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.042-.018.749.749 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
+        </div>
+        <div class="bc-card-body">
+          <div class="bc-description">Listener and analytics callback signatures changed at multiple versions. The <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">onSeekProcessed()</code> removal requires the most care — consumers must switch to the richer discontinuity callback.</div>
+
+          <div class="bc-changes-list">
+            <div class="bc-change-item">
+              <div class="bc-change-num">1</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">2.19:</strong> <code>onSeekProcessed()</code> removed → use <code>onPositionDiscontinuity(oldPosition, newPosition, DISCONTINUITY_REASON_SEEK)</code></div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">2</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">M3 1.0:</strong> <code>onDecoderEnabled(decoderCounters)</code> split into <code>onAudioEnabled(decoderCounters)</code> and <code>onVideoEnabled(decoderCounters)</code></div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">3</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">2.18:</strong> <code>onInputFormatChanged(Format)</code> → <code>onInputFormatChanged(Format, DecoderReuseEvaluation?)</code> — nullable reuse evaluation added</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 11 -->
+      <div class="bc-card" data-step="11" data-effort="adaptation" data-versions="2.17 m3-1.5" data-search="mediacodecadapter getmetrics persistablebundle bundle configuration flags onbufferavailablelistener asynchronous rewrite">
+        <div class="bc-card-header" onclick="bcToggle(this)">
+          <div class="bc-step-num">11</div>
+          <div class="bc-card-title">MediaCodecAdapter Changes</div>
+          <div class="bc-header-meta">
+            <span class="bc-badge version">2.17–M3 1.5</span>
+            <span class="bc-badge effort-adaptation">Adaptation</span>
+            <span class="bc-badge files">~6 files</span>
+          </div>
+          <svg class="bc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.042-.018.749.749 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
+        </div>
+        <div class="bc-card-body">
+          <div class="bc-description">Four changes to the <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">MediaCodecAdapter</code> interface spanning 2.17 to M3 1.5. The <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">AsynchronousMediaCodecAdapter</code> multi-arg constructor used in the fork is not present in Media3 — those sites require a full rewrite.</div>
+
+          <div class="bc-changes-list">
+            <div class="bc-change-item">
+              <div class="bc-change-num">1</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">2.17:</strong> <code>getMetrics()</code> return type changed from <code>Bundle</code> to <code>PersistableBundle</code></div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">2</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">M3 1.5:</strong> <code>Configuration.flags</code> field removed — was always 0, no replacement needed</div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-num">3</div>
+              <div class="bc-change-text"><strong style="color:#e6edf3;">M3 1.5:</strong> <code>OnBufferAvailableListener</code> interface added to async adapter — implement if using async mode</div>
+            </div>
+            <div class="bc-change-item">
+              <div class="bc-change-text" style="color:#f85149;"><strong>Fork-only:</strong> <code>AsynchronousMediaCodecAdapter</code> multi-arg constructor does not exist in Media3 — requires full rewrite to factory/builder pattern</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 12 -->
+      <div class="bc-card" data-step="12" data-effort="mechanical" data-versions="m3-1.2" data-search="extractor instanceof underlyinginstance fragmentedmp4extractor getunderlyinginstance">
+        <div class="bc-card-header" onclick="bcToggle(this)">
+          <div class="bc-step-num">12</div>
+          <div class="bc-card-title">Extractor instanceof Check</div>
+          <div class="bc-header-meta">
+            <span class="bc-badge version">M3 1.2</span>
+            <span class="bc-badge effort-mechanical">Mechanical</span>
+            <span class="bc-badge files">~3 files</span>
+          </div>
+          <svg class="bc-chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.042-.018.749.749 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
+        </div>
+        <div class="bc-card-body">
+          <div class="bc-description">Direct <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">instanceof</code> / <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">is</code> checks against concrete extractor types no longer work because extractors may be wrapped. Use <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">getUnderlyingInstance()</code> / <code style="font-family:monospace;font-size:11px;background:#1c2333;padding:1px 5px;border-radius:3px;color:#bc8cff">underlyingInstance</code> to unwrap first.</div>
+
+          <div class="bc-code-pair">
+            <div class="bc-code-section">
+              <div class="bc-code-label before">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0 13 0Z"/></svg>
+                Before
+              </div>
+              <div class="bc-code-block"><span class="tok-kw">if</span> (extractor <span class="tok-kw">is</span> <span class="tok-type">FragmentedMp4Extractor</span>) {
+    <span class="tok-cm">// handle fragmented mp4</span>
+}</div>
+            </div>
+            <div class="bc-code-section">
+              <div class="bc-code-label after">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>
+                After
+              </div>
+              <div class="bc-code-block"><span class="tok-kw">if</span> (extractor.<span class="tok-fn">underlyingInstance</span>
+        <span class="tok-kw">is</span> <span class="tok-type">FragmentedMp4Extractor</span>) {
+    <span class="tok-cm">// handle fragmented mp4</span>
+}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div class="bc-empty" id="bc-empty">
+        <svg width="40" height="40" viewBox="0 0 16 16" fill="#8b949e"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.75.75 0 1 1-1.06 1.06Zm-1.096-3.132a.75.75 0 0 0-.218.218 4.5 4.5 0 1 1 .218-.218Z"/></svg>
+        <div class="bc-empty-text">No steps match the current filters</div>
+      </div>
+
+    </div><!-- /bc-main -->
+  </div><!-- /bc-body -->
+</div><!-- /bc-container -->
+
+<script>
+(function() {
+  var activeVersion = null;
+
+  function bcToggle(header) {
+    var card = header.closest('.bc-card');
+    card.classList.toggle('open');
+  }
+
+  window.bcToggle = bcToggle;
+
+  function bcApplyFilters() {
+    var searchVal = document.getElementById('bc-search').value.toLowerCase().trim();
+    var effortVal = document.getElementById('bc-effort-filter').value;
+    var versionVal = document.getElementById('bc-version-filter').value;
+
+    // If timeline node selected, override version dropdown
+    var effectiveVersion = activeVersion || versionVal;
+
+    var cards = document.querySelectorAll('#tab-breaking .bc-card');
+    var visibleCount = 0;
+
+    cards.forEach(function(card) {
+      var effort = card.dataset.effort || '';
+      var versions = card.dataset.versions || '';
+      var search = card.dataset.search || '';
+      var title = card.querySelector('.bc-card-title').textContent.toLowerCase();
+      var desc = card.querySelector('.bc-description') ? card.querySelector('.bc-description').textContent.toLowerCase() : '';
+
+      var effortMatch = (effortVal === 'all') || (effort === effortVal);
+
+      var versionMatch = true;
+      if (effectiveVersion && effectiveVersion !== 'all') {
+        versionMatch = versions.indexOf(effectiveVersion) !== -1;
+      }
+
+      var searchMatch = true;
+      if (searchVal) {
+        var combined = title + ' ' + search + ' ' + desc;
+        var terms = searchVal.split(/\s+/);
+        searchMatch = terms.every(function(t) { return combined.indexOf(t) !== -1; });
+      }
+
+      var visible = effortMatch && versionMatch && searchMatch;
+      card.style.display = visible ? '' : 'none';
+      if (visible) visibleCount++;
+    });
+
+    document.getElementById('bc-count-num').textContent = visibleCount;
+    var empty = document.getElementById('bc-empty');
+    empty.classList.toggle('visible', visibleCount === 0);
+  }
+
+  function bcFilterVersion(ver, node) {
+    var allNodes = document.querySelectorAll('#tab-breaking .bc-ver-node');
+    if (activeVersion === ver) {
+      // Toggle off
+      activeVersion = null;
+      allNodes.forEach(function(n) { n.classList.remove('active'); });
+      document.getElementById('bc-version-filter').value = 'all';
+    } else {
+      activeVersion = ver;
+      allNodes.forEach(function(n) { n.classList.remove('active'); });
+      node.classList.add('active');
+      document.getElementById('bc-version-filter').value = ver;
+    }
+    bcApplyFilters();
+  }
+
+  window.bcFilterVersion = bcFilterVersion;
+
+  document.getElementById('bc-search').addEventListener('input', bcApplyFilters);
+  document.getElementById('bc-effort-filter').addEventListener('change', function() {
+    bcApplyFilters();
+  });
+  document.getElementById('bc-version-filter').addEventListener('change', function() {
+    activeVersion = null;
+    document.querySelectorAll('#tab-breaking .bc-ver-node').forEach(function(n) {
+      n.classList.remove('active');
+    });
+    bcApplyFilters();
+  });
+})();
+</script>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
+</div><!-- /tab-content -->
+</div><!-- /app -->
+
+<script>
+function switchTab(id) {
+  document.querySelectorAll('.main-tabs button').forEach(b => b.classList.remove('active'));
+  const tabMap = {graph:'tab-graph',gapanalysis:'tab-gapanalysis',consumers:'tab-consumers',breaking:'tab-breaking'};
+  Object.entries(tabMap).forEach(([k,v]) => {
+    const el = document.getElementById(v);
+    if(k===id) { el.style.display='block'; el.classList.add('active'); }
+    else { el.style.display='none'; el.classList.remove('active'); }
+  });
+  event.target.classList.add('active');
+  if(id==='graph'){setTimeout(()=>{render()},50);}
+}
+</script>
+
+</body>
+</html>
