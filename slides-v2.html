@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI-Driven E2E Testing</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
+    background: #000;
+    color: #fff;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  .slide {
+    display: none;
+    width: 100vw;
+    height: 100vh;
+    padding: 5vh 5vw 6vh 5vw;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .slide.active { display: flex; }
+
+  /* Footer */
+  .footer {
+    position: fixed;
+    bottom: 1.2vh;
+    left: 3vw;
+    right: 3vw;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8vw;
+    color: #475569;
+    z-index: 100;
+    pointer-events: none;
+  }
+  .footer .footer-left { font-weight: 500; letter-spacing: 0.5px; }
+  .footer .footer-right { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.7vw; }
+
+  /* Title slide */
+  .slide-title {
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+    text-align: center;
+    justify-content: center;
+    align-items: center;
+  }
+  .slide-title h1 {
+    font-size: 5vw;
+    font-weight: 700;
+    letter-spacing: -0.05vw;
+    margin-bottom: 1.5vh;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .slide-title .subtitle {
+    font-size: 1.8vw;
+    color: #94a3b8;
+    font-weight: 400;
+    margin-bottom: 6vh;
+  }
+  .slide-title .author {
+    font-size: 1.3vw;
+    color: #64748b;
+  }
+
+  /* Content slides */
+  .slide-content {
+    background: linear-gradient(180deg, #0f0f0f 0%, #1a1a1a 100%);
+  }
+  .slide-content h2 {
+    font-size: 3vw;
+    font-weight: 700;
+    margin-bottom: 3vh;
+    color: #f1f5f9;
+    letter-spacing: -0.02vw;
+  }
+  .slide-content h3 {
+    font-size: 1.8vw;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 2vh;
+    margin-top: 2vh;
+  }
+
+  .accent { color: #60a5fa; }
+  .accent-green { color: #4ade80; }
+  .accent-yellow { color: #fbbf24; }
+  .accent-purple { color: #a78bfa; }
+  .accent-pink { color: #f472b6; }
+
+  /* Bullet list */
+  .bullets {
+    list-style: none;
+    padding: 0;
+  }
+  .bullets li {
+    font-size: 1.7vw;
+    line-height: 1.6;
+    color: #cbd5e1;
+    padding: 0.6vh 0;
+    padding-left: 2vw;
+    position: relative;
+  }
+  .bullets li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: #60a5fa;
+    font-weight: 600;
+  }
+  .bullets li strong { color: #f1f5f9; }
+
+  /* Code/mono blocks */
+  .loop-visual {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 1.8vw;
+    text-align: center;
+    padding: 2.5vh 2vw;
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: 1vw;
+    border: 1px solid #334155;
+    margin: 2vh 0;
+    color: #94a3b8;
+    letter-spacing: 0.1vw;
+  }
+  .loop-visual .highlight { color: #fbbf24; font-weight: 600; }
+
+  /* Stats row */
+  .stats-row {
+    display: flex;
+    gap: 2vw;
+    margin: 2.5vh 0;
+  }
+  .stat-card {
+    flex: 1;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid #334155;
+    border-radius: 1vw;
+    padding: 2.5vh 1.5vw;
+    text-align: center;
+  }
+  .stat-card .number {
+    font-size: 3.2vw;
+    font-weight: 700;
+    color: #fbbf24;
+    display: block;
+  }
+  .stat-card .label {
+    font-size: 1.1vw;
+    color: #94a3b8;
+    margin-top: 0.8vh;
+    display: block;
+  }
+
+  /* Table */
+  .slide-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5vh 0;
+  }
+  .slide-table th {
+    text-align: left;
+    font-size: 1.1vw;
+    color: #64748b;
+    padding: 1vh 1vw;
+    border-bottom: 2px solid #334155;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05vw;
+  }
+  .slide-table td {
+    font-size: 1.5vw;
+    color: #cbd5e1;
+    padding: 1.2vh 1vw;
+    border-bottom: 1px solid #1e293b;
+  }
+  .slide-table td:first-child { color: #f1f5f9; font-weight: 500; }
+  .slide-table tr:last-child td { border-bottom: none; }
+
+  /* Status badges */
+  .badge {
+    display: inline-block;
+    font-size: 0.85vw;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06vw;
+    padding: 0.4vh 0.8vw;
+    border-radius: 100px;
+  }
+  .badge-working {
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.12);
+    border: 1px solid rgba(74, 222, 128, 0.25);
+  }
+  .badge-merging {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.12);
+    border: 1px solid rgba(251, 191, 36, 0.25);
+  }
+
+  /* Demo slide */
+  .slide-demo {
+    background: linear-gradient(180deg, #0a0a1a 0%, #0f172a 100%);
+    text-align: center;
+    align-items: center;
+  }
+  .slide-demo h2 {
+    font-size: 3.2vw;
+    margin-bottom: 1.5vh;
+  }
+  .demo-label {
+    display: inline-block;
+    font-size: 1vw;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.2vw;
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    padding: 0.6vh 1.5vw;
+    border-radius: 100px;
+    margin-bottom: 2vh;
+  }
+  .demo-points {
+    text-align: left;
+    max-width: 55vw;
+    margin: 0 auto;
+  }
+
+  /* Callout */
+  .callout {
+    background: rgba(251, 191, 36, 0.08);
+    border: 1px solid rgba(251, 191, 36, 0.25);
+    border-radius: 0.8vw;
+    padding: 1.8vh 2vw;
+    margin: 2vh 0;
+    font-size: 1.5vw;
+    color: #fbbf24;
+  }
+
+  /* End slide */
+  .slide-end {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #1a1a2e 100%);
+    text-align: center;
+    align-items: center;
+  }
+
+  /* Two-column */
+  .two-col {
+    display: flex;
+    gap: 3vw;
+    align-items: flex-start;
+  }
+  .two-col .col { flex: 1; }
+
+  /* Magic cards */
+  .magic-card {
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid #334155;
+    border-radius: 1vw;
+    padding: 2.5vh 2vw;
+    margin-bottom: 1.5vh;
+  }
+  .magic-card .magic-icon {
+    font-size: 2vw;
+    margin-bottom: 0.8vh;
+    display: block;
+  }
+  .magic-card .magic-title {
+    font-size: 1.6vw;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin-bottom: 0.8vh;
+  }
+  .magic-card .magic-items {
+    list-style: none;
+    padding: 0;
+  }
+  .magic-card .magic-items li {
+    font-size: 1.2vw;
+    color: #94a3b8;
+    padding: 0.3vh 0;
+    padding-left: 1.2vw;
+    position: relative;
+    line-height: 1.5;
+  }
+  .magic-card .magic-items li::before {
+    content: '·';
+    position: absolute;
+    left: 0;
+    color: #64748b;
+    font-weight: 700;
+  }
+
+  /* Adoption cards */
+  .adoption-grid {
+    display: flex;
+    gap: 2vw;
+    margin: 2vh 0;
+  }
+  .adoption-card {
+    flex: 1;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid #334155;
+    border-radius: 1vw;
+    padding: 2.5vh 2vw;
+    text-align: center;
+  }
+  .adoption-card .team-name {
+    font-size: 1.6vw;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin-bottom: 0.5vh;
+  }
+  .adoption-card .team-status {
+    font-size: 1.1vw;
+    color: #4ade80;
+    font-weight: 500;
+  }
+
+  /* Next steps */
+  .step-card {
+    background: rgba(30, 41, 59, 0.35);
+    border: 1px solid #334155;
+    border-radius: 0.8vw;
+    padding: 2vh 2vw;
+    margin-bottom: 1.2vh;
+  }
+  .step-card .step-title {
+    font-size: 1.5vw;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin-bottom: 0.5vh;
+  }
+  .step-card .step-desc {
+    font-size: 1.15vw;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+
+  /* Architecture slide */
+  .arch-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2vh;
+    margin-top: 2vh;
+  }
+  .arch-layer {
+    border-radius: 0.8vw;
+    padding: 2vh 2vw;
+  }
+  .arch-layer-title {
+    font-size: 1.2vw;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08vw;
+    margin-bottom: 1vh;
+  }
+  .arch-boxes {
+    display: flex;
+    gap: 1vw;
+    flex-wrap: wrap;
+  }
+  .arch-box {
+    background: rgba(255,255,255,0.08);
+    border-radius: 0.5vw;
+    padding: 1vh 1.2vw;
+    font-size: 1.1vw;
+    color: #e2e8f0;
+    font-weight: 500;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .layer-ai {
+    background: rgba(96, 165, 250, 0.1);
+    border: 1px solid rgba(96, 165, 250, 0.3);
+  }
+  .layer-ai .arch-layer-title { color: #60a5fa; }
+  .layer-ai .arch-box { border-color: rgba(96, 165, 250, 0.2); }
+  .layer-det {
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+  }
+  .layer-det .arch-layer-title { color: #94a3b8; }
+  .layer-infra {
+    background: rgba(100, 116, 139, 0.06);
+    border: 1px solid rgba(100, 116, 139, 0.15);
+  }
+  .layer-infra .arch-layer-title { color: #64748b; }
+
+  /* Progress bar */
+  .progress {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #60a5fa, #a78bfa);
+    transition: width 0.3s ease;
+    z-index: 100;
+  }
+
+  /* Speaker notes */
+  .speaker-notes {
+    display: none;
+    position: fixed;
+    bottom: 5vh;
+    left: 3vw;
+    right: 15vw;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid #334155;
+    border-radius: 0.8vw;
+    padding: 1.5vh 1.5vw;
+    font-size: 1vw;
+    color: #94a3b8;
+    line-height: 1.5;
+    z-index: 200;
+    max-height: 15vh;
+    overflow-y: auto;
+  }
+  .speaker-notes.visible { display: block; }
+</style>
+</head>
+<body>
+
+<!-- SLIDE 1: Title -->
+<div class="slide slide-title active" data-notes="Hi everyone, I'm Kelvin from the Media Engine team. I want to talk about AI-driven E2E testing — what it is, what's working, and where we're going.">
+  <h1>AI-Driven E2E Testing</h1>
+  <div class="subtitle">Automated validation for mobile engineers</div>
+  <div class="author">Kelvin Yu · @myu · Media Engine Team · April 2026</div>
+</div>
+
+<!-- SLIDE 2: Problem -->
+<div class="slide slide-content" data-notes="Relatable problem. Everyone does this loop. Pause after the 1+ hr/day stat — let it land. AI is accelerating how fast we ship, but testing still scales linearly with complexity.">
+  <h2>The <span class="accent-yellow">daily validation loop</span> is expensive</h2>
+  <div class="loop-visual">
+    build → run → trigger flow → read logs → verify → fix → <span class="highlight">repeat</span>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card">
+      <span class="number">5–10 min</span>
+      <span class="label">per build/run cycle</span>
+    </div>
+    <div class="stat-card">
+      <span class="number">20–40 min</span>
+      <span class="label">full validation pass</span>
+    </div>
+    <div class="stat-card">
+      <span class="number">1+ hr/day</span>
+      <span class="label">per engineer on repeated validation</span>
+    </div>
+  </div>
+  <ul class="bullets" style="margin-top: 1.5vh;">
+    <li>AI accelerates dev velocity — <strong>testing becomes the bottleneck</strong></li>
+    <li>Manual validation doesn't scale with <strong>feature complexity and shipping frequency</strong></li>
+  </ul>
+</div>
+
+<!-- SLIDE 3: What it is -->
+<div class="slide slide-content" data-notes="One sentence pitch. This is AI-agnostic — currently implemented as a plugin for Claude Code, but the architecture works with any AI coding assistant. The key is the context + tooling layer.">
+  <h2>What if you had an <span class="accent">AI testing companion</span>?</h2>
+  <ul class="bullets" style="font-size: 1.8vw;">
+    <li>An AI companion that <strong>executes E2E flows on a real device</strong> autonomously</li>
+    <li>Validates behavior via <strong>runtime logs + UI state</strong></li>
+    <li>Produces <strong>structured evidence reports</strong></li>
+    <li>Experience compounds — context knowledge gets <strong>documented and reused</strong></li>
+  </ul>
+  <div class="callout" style="margin-top: 3vh;">
+    Think: "I changed this code — does it still work?" → let the AI verify it.
+  </div>
+  <p style="color: #64748b; font-size: 1.2vw; margin-top: 2vh;">Currently implemented as a plugin for Claude Code · Architecture is AI-assistant agnostic</p>
+</div>
+
+<!-- SLIDE 4: What's the Magic -->
+<div class="slide slide-content" data-notes="This is the key insight. The AI itself isn't the magic — it's the structured context we feed it. Pre-recorded Snapchat knowledge means it already knows how to navigate our app. Team context packs mean each team owns their coverage.">
+  <h2>What's the <span class="accent-purple">magic</span>?</h2>
+  <div class="two-col" style="margin-top: 2vh;">
+    <div class="col">
+      <div class="magic-card" style="height: 100%;">
+        <span class="magic-icon" style="color: #60a5fa;">&#9881;</span>
+        <div class="magic-title">Pre-recorded context knowledge</div>
+        <ul class="magic-items">
+          <li>Snapchat-specific UI element name tags and accessibility identifiers</li>
+          <li>View hierarchy patterns — how screens are structured</li>
+          <li>Navigation knowledge — how to reach Spotlight, Stories, Chat, Camera, etc.</li>
+          <li>Log pattern dictionaries — what "working" looks like for each code path</li>
+          <li>Known edge cases — overlays, loading states, permission dialogs</li>
+          <li>UI dumps pre-linked with codebase — improves interpretation success rate</li>
+          <li>Log capture with timestamps — evidence-based validation reduces hallucination</li>
+        </ul>
+      </div>
+    </div>
+    <div class="col">
+      <div class="magic-card" style="height: 100%;">
+        <span class="magic-icon" style="color: #a78bfa;">&#9776;</span>
+        <div class="magic-title">Team-owned context packs</div>
+        <ul class="magic-items">
+          <li>Each team maintains their own context pack</li>
+          <li>Defines: how to trigger their flows, what signals to check, expected UI states</li>
+          <li>Teams extend coverage without touching the core system</li>
+          <li>Onboarding a new flow = add a context pack, not write automation code</li>
+          <li>Compounds over time — every validated run improves the pack</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top: 2vh; font-size: 1.3vw;">
+    UI dumps + codebase linking = accurate interpretation. Log evidence with timestamps = no hallucination. Context packs = <strong>what to look for</strong>.
+  </div>
+</div>
+
+<!-- SLIDE 5: How It's Built -->
+<div class="slide slide-content" data-notes="This is what exists today — a composable skill set. Not a monolith. Each piece does one thing. Context packs are where team knowledge lives. Scripts handle the deterministic stuff. Known issues capture learnings so they don't repeat. Where it's heading: deterministic parts become MCP tools, AI layer thins, remote execution via Bluebird.">
+  <h2>How it's <span class="accent">built</span> today</h2>
+  <p style="color: #94a3b8; font-size: 1.2vw; margin-bottom: 1.5vh;">A composable skill set — each piece does one thing well</p>
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1vw; margin-bottom: 2vh;">
+    <div class="arch-box" style="padding: 1.2vh 1.2vw;">
+      <span style="color:#60a5fa; font-weight:600; font-size:1.2vw;">Device Control Skills / MCPs</span><br>
+      <span style="font-size:0.95vw; color:#94a3b8;">ADB/idb — tap, swipe, screenshot, UI dump</span>
+    </div>
+    <div class="arch-box" style="padding: 1.2vh 1.2vw;">
+      <span style="color:#a78bfa; font-weight:600; font-size:1.2vw;">Set Tweaks Skill</span><br>
+      <span style="font-size:0.95vw; color:#94a3b8;">Toggle feature flags and COF tweaks on device</span>
+    </div>
+    <div class="arch-box" style="padding: 1.2vh 1.2vw;">
+      <span style="color:#f472b6; font-weight:600; font-size:1.2vw;">Flow Recorder Skill</span><br>
+      <span style="font-size:0.95vw; color:#94a3b8;">Interactive recording → replayable flow blueprints</span>
+    </div>
+    <div class="arch-box" style="padding: 1.2vh 1.2vw;">
+      <span style="color:#fbbf24; font-weight:600; font-size:1.2vw;">Metrics Collection Hooks</span><br>
+      <span style="font-size:0.95vw; color:#94a3b8;">Track success/failure, run times, failure categories</span>
+    </div>
+    <div class="arch-box" style="padding: 1.2vh 1.2vw;">
+      <span style="color:#4ade80; font-weight:600; font-size:1.2vw;">Context Knowledge Pack</span><br>
+      <span style="font-size:0.95vw; color:#94a3b8;">Team-owned: UI refs, flow triggers, validation rules</span>
+    </div>
+    <div class="arch-box" style="padding: 1.2vh 1.2vw;">
+      <span style="color:#38bdf8; font-weight:600; font-size:1.2vw;">Scripts</span><br>
+      <span style="font-size:0.95vw; color:#94a3b8;">Pre-flight env setup, log collection, report generation</span>
+    </div>
+    <div class="arch-box" style="padding: 1.2vh 1.2vw;">
+      <span style="color:#fb923c; font-weight:600; font-size:1.2vw;">Workflow Runbooks</span><br>
+      <span style="font-size:0.95vw; color:#94a3b8;">Structured playbooks for PR validation, benchmarking</span>
+    </div>
+    <div class="arch-box" style="padding: 1.2vh 1.2vw;">
+      <span style="color:#ef4444; font-weight:600; font-size:1.2vw;">Known Issues Registry</span><br>
+      <span style="font-size:0.95vw; color:#94a3b8;">Captured learnings, failure patterns, mitigations</span>
+    </div>
+  </div>
+  <div style="background: rgba(96, 165, 250, 0.06); border: 1px solid rgba(96, 165, 250, 0.2); border-radius: 0.8vw; padding: 1.5vh 2vw;">
+    <span style="color: #60a5fa; font-weight: 600; font-size: 1.2vw;">Where it's heading:</span>
+    <span style="color: #94a3b8; font-size: 1.1vw;"> Deterministic parts → stable MCP tools · AI layer thins as patterns harden · Remote execution via Bluebird/CI</span>
+  </div>
+</div>
+
+<!-- SLIDE 6: Demo 1 — Autonomous Flow Execution -->
+<div class="slide slide-demo" data-notes="PLAY 4-flow recording (fast-forward). Narrate: 'reads UI tree... decides to tap... handles overlay... switches flow.' This is the wow moment — zero human intervention.">
+  <div class="demo-label">Demo</div>
+  <h2>Autonomous Flow Execution</h2>
+  <p style="color: #94a3b8; font-size: 1.5vw; margin-bottom: 3vh;">4 flows, back-to-back, zero human intervention</p>
+  <div class="demo-points">
+    <ul class="bullets">
+      <li>Reads <strong>UI tree</strong> at each step to understand screen state</li>
+      <li>Decides what to tap/swipe — <strong>no hardcoded coordinates</strong></li>
+      <li>Handles overlays, loading states, UI variance <strong>automatically</strong></li>
+      <li>Validates expected <strong>log sequences and timing</strong> after each flow</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SLIDE 7: Demo 2 — PR Validation -->
+<div class="slide slide-demo" data-notes="OPEN validation report. Scroll: verdict → rules → timing → build fix. Key moment: 'it found a real build bug and fixed it autonomously.' Total time ~25 min, engineer time: 0.">
+  <div class="demo-label">Demo</div>
+  <h2>PR Validation → Evidence Report</h2>
+  <p style="color: #94a3b8; font-size: 1.5vw; margin-bottom: 3vh;">From one command to a complete validation report</p>
+  <div class="demo-points">
+    <ul class="bullets">
+      <li><strong>Analyzed PR diff</strong> → understood what changed</li>
+      <li><strong>Derived golden rules</strong> → "what does working mean?"</li>
+      <li><strong>Injected validation logs</strong> → built (fixed a build error along the way)</li>
+      <li><strong>Executed on device</strong> → captured logs → validated all rules</li>
+      <li><strong>Cleaned up everything</strong> → reverted logs, reset flags, restored branch</li>
+      <li><strong>Generated report</strong> → verdict, timing analysis, evidence</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SLIDE 8: What's Working Today -->
+<div class="slide slide-content" data-notes="Quick scan, don't read every row. All demonstrated on real PRs. Metrics collection is merging now — will give us data on success rates, run times, failure categories.">
+  <h2>What's <span class="accent-green">working</span> today</h2>
+  <table class="slide-table" style="margin-top: 2vh;">
+    <thead>
+      <tr><th>Capability</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Autonomous flow execution (multi-flow)</td><td><span class="badge badge-working">Working</span></td></tr>
+      <tr><td>PR validation → structured evidence report</td><td><span class="badge badge-working">Working</span></td></tr>
+      <tr><td>Build error detection + fix</td><td><span class="badge badge-working">Working</span></td></tr>
+      <tr><td>Benchmark: master vs branch comparison</td><td><span class="badge badge-working">Working</span></td></tr>
+      <tr><td>Record-flow: teach complex flows via walkthrough</td><td><span class="badge badge-working">Working</span></td></tr>
+      <tr><td>Generate instrumentation tests from validation</td><td><span class="badge badge-working">Working</span></td></tr>
+      <tr><td>Code path flow diagrams with timestamps</td><td><span class="badge badge-working">Working</span></td></tr>
+      <tr><td>Android + iOS support</td><td><span class="badge badge-working">Working</span></td></tr>
+      <tr><td>Metrics collection &amp; tracking</td><td><span class="badge badge-merging">Merging</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- SLIDE 9: Adoption & Feedback -->
+<div class="slide slide-content" data-notes="Four teams already using it with positive feedback. Context pack model makes it easy for new teams to onboard — add your flows, not write automation code.">
+  <h2><span class="accent">Adoption</span> &amp; feedback</h2>
+  <div class="adoption-grid" style="margin-top: 3vh;">
+    <div class="adoption-card">
+      <div class="team-name">Media Engine</div>
+      <div class="team-status">Built &amp; validated through real PRs</div>
+    </div>
+    <div class="adoption-card">
+      <div class="team-name">MDP</div>
+      <div class="team-status">Using · positive feedback</div>
+    </div>
+    <div class="adoption-card">
+      <div class="team-name">Ads Platform</div>
+      <div class="team-status">Using · positive feedback</div>
+    </div>
+    <div class="adoption-card">
+      <div class="team-name">Activation</div>
+      <div class="team-status">Using · positive feedback</div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top: 4vh; font-size: 1.4vw;">
+    Context pack model → teams onboard by adding their flows, not writing automation code
+  </div>
+  <p style="color: #94a3b8; font-size: 1.3vw; margin-top: 3vh;">Open to more teams — if you have flows that are painful to validate manually, this is built for that.</p>
+</div>
+
+<!-- SLIDE 10: Next Steps -->
+<div class="slide slide-content" data-notes="Three tracks. CI integration is already in progress with QA and Bluebird. Reliability improves as we add more context knowledge and harden tooling. Metrics will give us real data on impact.">
+  <h2><span class="accent-yellow">Next steps</span></h2>
+  <div style="margin-top: 2vh;">
+    <div class="step-card">
+      <div class="step-title"><span class="accent">A.</span> Remote / CI integration</div>
+      <div class="step-desc">Already working with QA to integrate with <strong>Bluebird</strong>. Goal: PR triggers automated validation, results posted back to the PR. No engineer intervention needed.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-title"><span class="accent">B.</span> Reliability improvement</div>
+      <div class="step-desc">Expand context knowledge packs — more teams, more flows, more edge cases. Harden deterministic tooling (device control, log parsing, report generation). AI dependency shrinks as patterns solidify.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-title"><span class="accent">C.</span> Metrics-driven iteration</div>
+      <div class="step-desc">Track success/failure rates, run times, failure categories. Measure engineer time saved. Use data to prioritize what to harden next.</div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 11: Try It Out + Questions -->
+<div class="slide slide-end" data-notes="Setup through your AI coding assistant. Plugin repo link is on screen. Happy to take questions.">
+  <h2 style="font-size: 3.5vw; margin-bottom: 1.5vh;">
+    <span class="accent">Try it out</span>
+  </h2>
+  <p style="font-size: 1.5vw; color: #94a3b8; margin-bottom: 4vh;">
+    Available as an AI plugin — works with Claude Code today
+  </p>
+  <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; border-radius: 1vw; padding: 2.5vh 2.5vw; display: inline-block; margin-bottom: 5vh;">
+    <a href="https://github.sc-corp.net/Snapchat/snap-ai-plugins/tree/main/plugins/client-test-automator" target="_blank" style="font-size: 1.8vw; font-weight: 600; color: #60a5fa; text-decoration: none; letter-spacing: 0.02vw;">Plugin Repo</a>
+  </div>
+  <p style="font-size: 2.5vw; color: #f1f5f9; margin-top: 1.5vh; font-weight: 600;">
+    Questions?
+  </p>
+  <p style="color: #475569; font-size: 1.3vw; margin-top: 5vh;">
+    Kelvin Yu · @myu · Media Engine Team
+  </p>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span class="footer-left">AI-Driven E2E Testing · Kelvin Yu @myu · Media Engine Team</span>
+  <span class="footer-right" id="slideNum"></span>
+</div>
+
+<!-- Progress bar -->
+<div class="progress" id="progress"></div>
+
+<!-- Speaker notes -->
+<div class="speaker-notes" id="speakerNotes"></div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let current = 0;
+  let notesVisible = false;
+
+  function showSlide(n) {
+    slides[current].classList.remove('active');
+    current = Math.max(0, Math.min(n, slides.length - 1));
+    slides[current].classList.add('active');
+
+    const pct = ((current + 1) / slides.length) * 100;
+    document.getElementById('progress').style.width = pct + '%';
+    document.getElementById('slideNum').textContent = (current + 1) + ' / ' + slides.length;
+
+    const notes = slides[current].getAttribute('data-notes') || '';
+    document.getElementById('speakerNotes').textContent = notes;
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault();
+      showSlide(current + 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      showSlide(current - 1);
+    } else if (e.key === 'n' || e.key === 'N') {
+      notesVisible = !notesVisible;
+      document.getElementById('speakerNotes').classList.toggle('visible', notesVisible);
+    } else if (e.key === 'Home') {
+      showSlide(0);
+    } else if (e.key === 'End') {
+      showSlide(slides.length - 1);
+    }
+  });
+
+  let touchStartX = 0;
+  document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+  document.addEventListener('touchend', (e) => {
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) {
+      diff > 0 ? showSlide(current + 1) : showSlide(current - 1);
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.clientX < window.innerWidth / 3) {
+      showSlide(current - 1);
+    } else {
+      showSlide(current + 1);
+    }
+  });
+
+  showSlide(0);
+</script>
+</body>
+</html>
